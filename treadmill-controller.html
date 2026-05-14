@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Treadmill Controller</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f4f5f7;
+  --s1: #ffffff;
+  --s2: #edf0f4;
+  --s3: #e2e7ef;
+  --border: #d1d9e6;
+  --text: #1a2332;
+  --muted: #6b7a90;
+  --cyan: #0891b2;
+  --cyan-dim: #e0f7fa;
+  --green: #059669;
+  --green-dim: #d1fae5;
+  --red: #dc2626;
+  --amber: #d97706;
+  --amber-dim: #fef3c7;
+  --purple: #7c3aed;
+  --mono: 'JetBrains Mono', monospace;
+  --ui: 'Outfit', sans-serif;
+  --r: 14px;
+  --r-sm: 10px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { height:100%; }
+body { background:var(--bg); color:var(--text); font-family:var(--ui); min-height:100%; overflow-x:hidden; }
+
+/* --- Layout --- */
+.app { max-width:480px; margin:0 auto; padding:1rem; padding-bottom:5rem; }
+.view { display:none; }
+.view.active { display:block; animation: fadeIn 0.2s; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+
+/* --- Common --- */
+.card {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; margin-bottom:0.75rem;
+}
+.card-body { padding:1rem; }
+
+h2 { font-size:1.1rem; font-weight:700; margin-bottom:1rem; }
+h3 { font-size:0.85rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; margin-bottom:0.5rem; }
+
+button {
+  font-family:var(--ui); font-weight:600; border:none; cursor:pointer;
+  border-radius:var(--r-sm); transition:all 0.12s; touch-action:manipulation;
+}
+button:disabled { opacity:0.3; cursor:not-allowed; }
+button:active:not(:disabled) { transform:scale(0.97); }
+
+.btn { padding:0.65rem 1.25rem; font-size:0.85rem; }
+.btn-cyan { background:var(--cyan); color:var(--bg); }
+.btn-cyan:hover:not(:disabled) { filter:brightness(1.1); }
+.btn-red { background:var(--red); color:#fff; }
+.btn-green { background:var(--green); color:var(--bg); }
+.btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
+.btn-ghost:hover:not(:disabled) { border-color:var(--cyan); color:var(--cyan); }
+.btn-sm { padding:0.4rem 0.75rem; font-size:0.75rem; }
+.btn-full { width:100%; }
+.btn-icon { background:var(--s2); color:var(--text); width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; border-radius:50%; flex-shrink:0; }
+
+.row { display:flex; gap:0.5rem; align-items:center; }
+.row-between { justify-content:space-between; }
+.gap-sm { gap:0.35rem; }
+
+input, select {
+  font-family:var(--mono); font-size:0.85rem; padding:0.5rem 0.65rem;
+  background:var(--bg); border:1px solid var(--border); border-radius:var(--r-sm);
+  color:var(--text); outline:none; width:100%;
+}
+input:focus { border-color:var(--cyan); }
+
+.tag { display:inline-flex; align-items:center; font-size:0.65rem; font-weight:600; padding:0.2rem 0.5rem; border-radius:6px; text-transform:uppercase; letter-spacing:0.04em; }
+.tag-speed { background:var(--green-dim); color:var(--green); }
+.tag-incline { background:var(--amber-dim); color:var(--amber); }
+.tag-repeat { background:#ede9fe; color:var(--purple); }
+
+/* --- Connection Bar --- */
+.conn {
+  display:flex; align-items:center; gap:0.6rem;
+  padding:0.6rem 0.85rem; background:var(--s1); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:1rem;
+}
+.conn-dot { width:10px; height:10px; border-radius:50%; background:var(--red); flex-shrink:0; }
+.conn-dot.on { background:var(--green); box-shadow:0 0 8px rgba(5,150,105,0.4); }
+.conn-label { font-family:var(--mono); font-size:0.75rem; flex:1; }
+
+/* ============================================
+   VIEW: HOME
+   ============================================ */
+.logo { text-align:center; padding:1.5rem 0 0.5rem; }
+.logo-title { font-size:1.6rem; font-weight:800; letter-spacing:-0.02em; }
+.logo-title span { color:var(--cyan); }
+.logo-sub { font-size:0.75rem; color:var(--muted); margin-top:0.15rem; }
+
+.workout-list { margin-top:0.75rem; }
+
+.workout-item {
+  display:flex; align-items:center; gap:0.75rem;
+  padding:0.85rem 1rem; background:var(--s1); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:0.5rem; cursor:pointer;
+  transition:border-color 0.15s;
+}
+.workout-item:hover { border-color:var(--cyan); }
+
+.workout-item-info { flex:1; min-width:0; }
+.workout-item-name { font-weight:700; font-size:0.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.workout-item-meta { font-size:0.7rem; color:var(--muted); margin-top:0.15rem; font-family:var(--mono); }
+.workout-item-play { color:var(--cyan); font-size:1.4rem; flex-shrink:0; }
+.workout-item-actions { display:flex; gap:0.25rem; flex-shrink:0; }
+
+.empty-state { text-align:center; padding:3rem 1rem; color:var(--muted); }
+.empty-state-icon { font-size:2.5rem; margin-bottom:0.5rem; }
+.empty-state-text { font-size:0.85rem; }
+
+/* ============================================
+   VIEW: EDITOR
+   ============================================ */
+.editor-header { display:flex; align-items:center; gap:0.5rem; margin-bottom:1rem; }
+.editor-header input { font-family:var(--ui); font-size:1.1rem; font-weight:700; background:transparent; border:none; border-bottom:2px solid var(--border); border-radius:0; padding:0.25rem 0; }
+.editor-header input:focus { border-bottom-color:var(--cyan); }
+
+.block-list { margin-bottom:1rem; }
+
+.block {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  margin-bottom:0.5rem; overflow:hidden;
+}
+
+.segment-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr 36px; gap:0.5rem;
+  padding:0.65rem 0.75rem; align-items:center;
+}
+
+.segment-row.in-superset {
+  border-left:3px solid var(--purple);
+  margin-left:0;
+}
+
+.superset-header {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.6rem 0.75rem; background:var(--s2); border-bottom:1px solid var(--border);
+}
+.superset-header .tag { margin-right:auto; }
+
+.field { display:flex; flex-direction:column; gap:0.15rem; }
+.field-label { font-size:0.55rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+.field input { font-size:0.8rem; padding:0.35rem 0.45rem; }
+.field-row { display:flex; gap:0.25rem; }
+.field-unit { font-size:0.65rem; color:var(--muted); display:flex; align-items:center; }
+
+.remove-btn { background:none; color:var(--muted); font-size:1rem; padding:0; width:36px; height:36px; display:flex; align-items:center; justify-content:center; border-radius:50%; }
+.remove-btn:hover { color:var(--red); background:rgba(255,71,87,0.1); }
+
+.add-buttons { display:flex; gap:0.5rem; margin-bottom:1.5rem; }
+
+.editor-actions { display:flex; gap:0.5rem; }
+
+/* ============================================
+   VIEW: PREVIEW
+   ============================================ */
+.preview-name { font-size:1.3rem; font-weight:800; margin-bottom:0.25rem; }
+.preview-stats { font-family:var(--mono); font-size:0.75rem; color:var(--muted); margin-bottom:1rem; display:flex; gap:1rem; }
+
+.timeline-preview {
+  display:flex; width:100%; height:40px; border-radius:8px; overflow:hidden; margin-bottom:1rem;
+  background:var(--s2);
+}
+.timeline-bar {
+  height:100%; display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:0.55rem; font-weight:600; color:rgba(255,255,255,0.7);
+  min-width:2px; border-right:1px solid var(--bg); transition: opacity 0.2s;
+  position:relative;
+}
+
+.step-list { margin-bottom:1rem; }
+.step-item {
+  display:flex; align-items:center; gap:0.5rem;
+  padding:0.5rem 0.65rem; border-radius:var(--r-sm);
+  font-family:var(--mono); font-size:0.75rem;
+  margin-bottom:0.25rem; background:var(--s1);
+}
+.step-item.active { background:var(--s3); border:1px solid var(--cyan); }
+.step-item.done { opacity:0.35; }
+.step-index { color:var(--muted); min-width:24px; text-align:right; }
+.step-detail { flex:1; }
+.step-time { color:var(--muted); }
+
+/* ============================================
+   VIEW: RUNNER
+   ============================================ */
+.runner-top {
+  text-align:center; padding:1rem 0;
+}
+.runner-phase { font-size:0.7rem; color:var(--cyan); text-transform:uppercase; letter-spacing:0.1em; font-weight:700; }
+.runner-speed {
+  font-family:var(--mono); font-size:5rem; font-weight:800; line-height:1;
+  margin:0.25rem 0; color:var(--green);
+}
+.runner-unit { font-size:0.8rem; color:var(--muted); }
+.runner-incline { font-family:var(--mono); font-size:1.3rem; font-weight:700; color:var(--amber); margin-top:0.25rem; }
+
+.runner-progress { margin:1rem 0; }
+.progress-bar-bg {
+  width:100%; height:10px; background:var(--s2); border-radius:5px; overflow:hidden; margin-bottom:0.35rem;
+}
+.progress-bar-fill {
+  height:100%; border-radius:5px; transition:width 0.5s linear;
+  background:linear-gradient(90deg, var(--cyan), var(--green));
+}
+.progress-labels { display:flex; justify-content:space-between; font-family:var(--mono); font-size:0.7rem; color:var(--muted); }
+
+.runner-segment-info {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  padding:0.85rem 1rem; margin-bottom:0.75rem;
+}
+.seg-now-label { font-size:0.65rem; color:var(--cyan); text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:0.35rem; }
+.seg-now-detail { font-family:var(--mono); font-size:0.95rem; font-weight:600; }
+.seg-now-timer { font-family:var(--mono); font-size:2rem; font-weight:800; color:var(--cyan); margin-top:0.25rem; }
+
+.runner-next {
+  background:var(--s2); border:1px solid var(--border); border-radius:var(--r);
+  padding:0.65rem 0.85rem; margin-bottom:1rem; opacity:0.7;
+}
+.next-label { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.08em; font-weight:700; margin-bottom:0.2rem; }
+.next-detail { font-family:var(--mono); font-size:0.8rem; }
+
+.runner-timeline {
+  display:flex; width:100%; height:28px; border-radius:6px; overflow:hidden; margin-bottom:1rem;
+  background:var(--s2);
+}
+.rt-bar {
+  height:100%; display:flex; align-items:center; justify-content:center;
+  font-size:0.5rem; font-family:var(--mono); font-weight:600; color:rgba(255,255,255,0.5);
+  border-right:1px solid var(--bg); transition:opacity 0.2s;
+}
+.rt-bar.done { opacity:0.3; }
+.rt-bar.active { outline:2px solid #fff; outline-offset:-2px; z-index:1; }
+
+.runner-actions { display:flex; gap:0.5rem; margin-bottom:1rem; }
+.runner-actions button { flex:1; padding:1rem; font-size:1rem; font-weight:800; }
+
+/* Colors for timeline segments */
+.seg-c0{background:#0e7490} .seg-c1{background:#0369a1} .seg-c2{background:#0f766e}
+.seg-c3{background:#15803d} .seg-c4{background:#a16207} .seg-c5{background:#c2410c}
+.seg-c6{background:#9333ea} .seg-c7{background:#be185d}
+
+.hidden { display:none !important; }
+
+/* Runner fullscreen layout */
+#viewRunner {
+  position:fixed !important; top:0; left:0; right:0; bottom:0;
+  z-index:100; background:var(--bg); margin:0; padding:0;
+}
+#viewRunner.active { display:block !important; }
+#runnerLayout {
+  display:flex; flex-direction:column; height:100dvh;
+  padding:0.5rem; gap:0.4rem; box-sizing:border-box;
+}
+#runnerChart { flex:0 0 auto; }
+#runnerControls {
+  flex:1; display:flex; flex-direction:column; gap:0.4rem; min-height:0;
+}
+.run-card {
+  background:var(--s1); border:1px solid var(--border);
+  border-radius:var(--r); padding:0.65rem 0.75rem;
+}
+
+/* Landscape: side by side */
+@media (orientation:landscape) {
+  #runnerLayout { flex-direction:row; gap:0.5rem; }
+  #runnerChart { flex:1 1 50%; min-width:0; }
+  #runnerControls { flex:1 1 50%; min-width:0; }
+  #runChartWrap { height:100%; display:flex; align-items:center; }
+  #runChartSvg { width:100%; }
+}
+
+/* Small portrait phones: tighter spacing */
+@media (orientation:portrait) and (max-height:700px) {
+  #runnerLayout { gap:0.25rem; padding:0.35rem; }
+  .run-card { padding:0.5rem 0.6rem; }
+}
+
+.unit-btn {
+  font-family:var(--mono); font-size:0.7rem; font-weight:600;
+  padding:0.3rem 0.65rem; border-radius:6px; background:transparent;
+  color:var(--muted); border:none; cursor:pointer;
+}
+.unit-btn.active { background:var(--cyan); color:var(--bg); }
+
+.mode-toggle {
+  font-family:var(--mono); font-size:0.55rem; font-weight:600;
+  color:var(--cyan); cursor:pointer; background:none; border:none;
+  padding:0; text-decoration:underline; text-underline-offset:2px;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- Connection bar (global) -->
+<div class="conn">
+  <div class="conn-dot" id="dot"></div>
+  <span class="conn-label" id="connLabel">Niet verbonden</span>
+  <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Verbind</button>
+  <button class="btn btn-ghost btn-sm hidden" id="btnDisc" onclick="bleDisconnect()">Verbreek</button>
+</div>
+
+<!-- =========================================
+     VIEW: HOME
+     ========================================= -->
+<div class="view active" id="viewHome">
+  <div class="logo">
+    <div class="logo-title">Treadmill<span>Ctrl</span></div>
+    <div class="logo-sub">FTMS Workout Controller</div>
+  </div>
+
+  <div style="margin-top:1.25rem;">
+    <div class="row row-between" style="margin-bottom:0.75rem;">
+      <h3 style="margin:0;">Mijn Workouts</h3>
+      <button class="btn btn-cyan btn-sm" onclick="openEditor(null)">+ Nieuw</button>
+    </div>
+    <div id="workoutList"></div>
+  </div>
+</div>
+
+<!-- =========================================
+     VIEW: EDITOR
+     ========================================= -->
+<div class="view" id="viewEditor">
+  <div class="editor-header">
+    <button class="btn-icon" onclick="showView('viewHome')" style="font-size:1rem;">←</button>
+    <input id="editorName" placeholder="Workout naam..." value="Nieuwe Workout">
+  </div>
+
+  <!-- Eenheden -->
+  <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.35rem;">Eenheden</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 36px;gap:0.5rem;margin-bottom:0.5rem;align-items:center;">
+    <div style="display:flex;gap:0.2rem;background:var(--s2);border-radius:8px;padding:3px;width:fit-content;">
+      <button class="unit-btn" id="uDurKm" onclick="setDurUnit('km')">km</button>
+      <button class="unit-btn" id="uDurMin" onclick="setDurUnit('min')">min</button>
+      <button class="unit-btn active" id="uDurSec" onclick="setDurUnit('sec')">sec</button>
+    </div>
+    <div style="display:flex;gap:0.2rem;background:var(--s2);border-radius:8px;padding:3px;width:fit-content;">
+      <button class="unit-btn active" id="unitKmh" onclick="setSpeedUnit('kmh')">km/h</button>
+      <button class="unit-btn" id="unitPace" onclick="setSpeedUnit('pace')">min/km</button>
+    </div>
+    <div></div>
+    <div></div>
+  </div>
+
+  <div class="block-list" id="blockList"></div>
+
+  <div class="add-buttons">
+    <button class="btn btn-ghost btn-sm" onclick="addSegment()" style="flex:1;">+ Segment</button>
+    <button class="btn btn-ghost btn-sm" onclick="addSuperset()" style="flex:1;">+ Superset</button>
+  </div>
+
+  <div class="editor-actions">
+    <button class="btn btn-ghost" onclick="showView('viewHome')" style="flex:1;">Annuleer</button>
+    <button class="btn btn-cyan" onclick="saveWorkout()" style="flex:1;">Opslaan</button>
+  </div>
+</div>
+
+<!-- =========================================
+     VIEW: PREVIEW
+     ========================================= -->
+<div class="view" id="viewPreview">
+  <div style="margin-bottom:1rem;">
+    <button class="btn-icon" onclick="showView('viewHome')" style="font-size:1rem;">←</button>
+  </div>
+  <div class="preview-name" id="previewName"></div>
+  <div class="preview-stats" id="previewStats"></div>
+  <div id="previewChart" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem 0.5rem 0.25rem 0.5rem;margin-bottom:0.75rem;overflow:hidden;"></div>
+  <div id="previewBlocks" style="margin-bottom:1rem;"></div>
+  <button class="btn btn-green btn-full" onclick="startRunner()" style="padding:1rem;font-size:1.1rem;font-weight:800;">
+    ▶ Start Workout
+  </button>
+</div>
+
+<!-- =========================================
+     VIEW: RUNNER
+     ========================================= -->
+<div class="view" id="viewRunner" style="display:none;">
+  <div id="runnerLayout">
+    <!-- Left / Top: Chart -->
+    <div id="runnerChart">
+      <div id="runChartWrap" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem 0.4rem 0.2rem 0.4rem;overflow:hidden;height:100%;">
+        <div id="runChartSvg"></div>
+      </div>
+    </div>
+
+    <!-- Right / Bottom: Controls -->
+    <div id="runnerControls">
+      <!-- Current segment -->
+      <div class="run-card" id="runCurrentCard">
+        <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.35rem;" id="runSegLabel">Nu</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
+          <div style="display:flex;align-items:baseline;gap:0.6rem;">
+            <div>
+              <span id="runSpeed" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--green);">0.0</span>
+              <span style="font-size:0.65rem;color:var(--muted);">km/h</span>
+            </div>
+            <div>
+              <span id="runPace" style="font-family:var(--mono);font-size:1.1rem;font-weight:600;">--:--</span>
+              <span style="font-size:0.65rem;color:var(--muted);">min/km</span>
+            </div>
+          </div>
+          <span id="runSegTimer" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--cyan);">0:00</span>
+        </div>
+        <div style="height:5px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;">
+          <div id="runSegProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
+        </div>
+      </div>
+
+      <!-- Next segment -->
+      <div class="run-card" id="runNextBox" style="opacity:0.4;">
+        <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.3rem;">Hierna</div>
+        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
+          <div style="display:flex;align-items:baseline;gap:0.6rem;">
+            <div>
+              <span id="runNextSpeed" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--green);">--</span>
+              <span style="font-size:0.6rem;color:var(--muted);">km/h</span>
+            </div>
+            <div>
+              <span id="runNextPace" style="font-family:var(--mono);font-size:1rem;font-weight:600;">--:--</span>
+              <span style="font-size:0.6rem;color:var(--muted);">min/km</span>
+            </div>
+          </div>
+          <span id="runNextTime" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--muted);">--:--</span>
+        </div>
+      </div>
+
+      <!-- Totals -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;" id="runTotalsRow">
+        <div class="run-card" style="text-align:center;padding:0.5rem;">
+          <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Afstand</div>
+          <span id="runTotalDist" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0.00</span>
+          <span style="font-size:0.6rem;color:var(--muted);"> km</span>
+        </div>
+        <div class="run-card" style="text-align:center;padding:0.5rem;">
+          <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Tijd</div>
+          <span id="runTotalTime" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0:00</span>
+        </div>
+      </div>
+
+      <!-- Buttons pushed to bottom -->
+      <div id="runBtnRow" class="runner-actions" style="margin-top:auto;">
+        <button class="btn btn-ghost" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
+        <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled>⏹ Stop</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<script>
+/* =============================================
+   DATA MODEL & STORAGE
+   ============================================= */
+const STORAGE_KEY = 'treadmill_workouts';
+
+function loadWorkouts() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+function saveWorkouts(list) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+
+/* =============================================
+   VIEW MANAGEMENT
+   ============================================= */
+function showView(id) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if (id === 'viewHome') renderWorkoutList();
+}
+
+/* =============================================
+   HOME: WORKOUT LIST
+   ============================================= */
+function renderWorkoutList() {
+  const list = loadWorkouts();
+  const el = document.getElementById('workoutList');
+  if (!list.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏃‍♀️</div><div class="empty-state-text">Nog geen workouts.<br>Maak je eerste workout aan!</div></div>`;
+    return;
+  }
+  el.innerHTML = list.map((w, i) => {
+    const steps = flattenWorkout(w);
+    const totalSec = steps.reduce((s, st) => s + st.duration, 0);
+    return `<div class="workout-item" onclick="openPreview('${w.id}')">
+      <div class="workout-item-info">
+        <div class="workout-item-name">${esc(w.name)}</div>
+        <div class="workout-item-meta">${steps.length} stappen · ${fmtTime(totalSec)}</div>
+      </div>
+      <div class="workout-item-actions">
+        <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" onclick="event.stopPropagation();openEditor('${w.id}')">✏️</button>
+        <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" onclick="event.stopPropagation();deleteWorkout('${w.id}')">🗑</button>
+      </div>
+      <div class="workout-item-play">▶</div>
+    </div>`;
+  }).join('');
+}
+
+function deleteWorkout(id) {
+  if (!confirm('Workout verwijderen?')) return;
+  const list = loadWorkouts().filter(w => w.id !== id);
+  saveWorkouts(list);
+  renderWorkoutList();
+}
+
+/* =============================================
+   EDITOR
+   ============================================= */
+let editorBlocks = [];
+let editingId = null;
+let speedUnit = localStorage.getItem('treadmill_speed_unit') || 'kmh';
+let durUnit = localStorage.getItem('treadmill_dur_unit') || 'sec';
+
+function setSpeedUnit(unit) {
+  speedUnit = unit;
+  localStorage.setItem('treadmill_speed_unit', unit);
+  syncUnitUI();
+  renderBlocks();
+}
+
+function setDurUnit(unit) {
+  durUnit = unit;
+  localStorage.setItem('treadmill_dur_unit', unit);
+  syncUnitUI();
+  renderBlocks();
+}
+
+function syncUnitUI() {
+  document.getElementById('unitKmh').classList.toggle('active', speedUnit === 'kmh');
+  document.getElementById('unitPace').classList.toggle('active', speedUnit === 'pace');
+  document.getElementById('uDurSec').classList.toggle('active', durUnit === 'sec');
+  document.getElementById('uDurMin').classList.toggle('active', durUnit === 'min');
+  document.getElementById('uDurKm').classList.toggle('active', durUnit === 'km');
+}
+
+// Speed ↔ Pace conversion
+function kmhToPace(kmh) {
+  if (kmh <= 0) return '--:--';
+  const pace = 60 / kmh;
+  const m = Math.floor(pace);
+  const s = Math.round((pace - m) * 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function paceToKmh(paceStr) {
+  if (paceStr.includes(':')) {
+    const [m, s] = paceStr.split(':').map(Number);
+    if (!m && !s) return 0;
+    return 60 / (m + (s || 0) / 60);
+  }
+  const p = parseFloat(paceStr);
+  return p > 0 ? 60 / p : 0;
+}
+
+function openEditor(id) {
+  editingId = id;
+  if (id) {
+    const w = loadWorkouts().find(w => w.id === id);
+    if (!w) return;
+    document.getElementById('editorName').value = w.name;
+    editorBlocks = JSON.parse(JSON.stringify(w.blocks));
+  } else {
+    document.getElementById('editorName').value = 'Nieuwe Workout';
+    editorBlocks = [
+      { type:'segment', mode:'time', duration:300, distance:0, speed:5, incline:0 }
+    ];
+  }
+  // Ensure all segments have mode + distance
+  function ensure(seg) {
+    if (!seg.mode) seg.mode = 'time';
+    if (!seg.distance) seg.distance = seg.speed > 0 ? seg.duration / 3600 * seg.speed : 0;
+  }
+  editorBlocks.forEach(b => {
+    if (b.type === 'segment') ensure(b);
+    else if (b.segments) b.segments.forEach(ensure);
+  });
+  syncUnitUI();
+  renderBlocks();
+  showView('viewEditor');
+}
+
+function newSegDefaults() {
+  if (durUnit === 'km') return { mode:'distance', duration:0, distance:1.0, speed:5, incline:0 };
+  return { mode:'time', duration: durUnit === 'min' ? 60 : 60, distance:0, speed:5, incline:0 };
+}
+
+function addSegment() {
+  editorBlocks.push({ type:'segment', ...newSegDefaults() });
+  renderBlocks();
+}
+
+function addSuperset() {
+  editorBlocks.push({
+    type:'superset', repeats:3,
+    segments:[ { ...newSegDefaults(), speed:8 }, { ...newSegDefaults() } ]
+  });
+  renderBlocks();
+}
+
+function addSegmentToSuperset(blockIdx) {
+  editorBlocks[blockIdx].segments.push({ ...newSegDefaults() });
+  renderBlocks();
+}
+
+function removeBlock(idx) {
+  editorBlocks.splice(idx, 1);
+  renderBlocks();
+}
+
+function removeSegFromSuperset(blockIdx, segIdx) {
+  editorBlocks[blockIdx].segments.splice(segIdx, 1);
+  if (editorBlocks[blockIdx].segments.length === 0) editorBlocks.splice(blockIdx, 1);
+  renderBlocks();
+}
+
+function renderBlocks() {
+  const el = document.getElementById('blockList');
+  el.innerHTML = editorBlocks.map((block, bi) => {
+    if (block.type === 'segment') {
+      return `<div class="block">${segmentRowHTML(block, bi, null)}</div>`;
+    } else {
+      const segs = block.segments.map((s, si) =>
+        segmentRowHTML(s, bi, si)
+      ).join('');
+      return `<div class="block">
+        <div class="superset-header">
+          <span class="tag tag-repeat">⟳ Superset</span>
+          <div class="field" style="width:60px;">
+            <label class="field-label">Herhaal</label>
+            <input type="number" min="1" max="50" value="${block.repeats}"
+              onchange="editorBlocks[${bi}].repeats=+this.value">
+          </div>
+          <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);">×</span>
+          <button class="remove-btn" onclick="removeBlock(${bi})">×</button>
+        </div>
+        ${segs}
+        <div style="padding:0.4rem 0.75rem;">
+          <button class="btn btn-ghost btn-sm" onclick="addSegmentToSuperset(${bi})" style="width:100%;font-size:0.7rem;">+ Segment</button>
+        </div>
+      </div>`;
+    }
+  }).join('');
+}
+
+function segmentRowHTML(seg, blockIdx, segIdx) {
+  const isSuper = segIdx !== null;
+  const prefix = isSuper
+    ? `editorBlocks[${blockIdx}].segments[${segIdx}]`
+    : `editorBlocks[${blockIdx}]`;
+  const removeAction = isSuper
+    ? `removeSegFromSuperset(${blockIdx},${segIdx})`
+    : `removeBlock(${blockIdx})`;
+
+  // First column based on durUnit
+  let col1;
+  if (durUnit === 'km') {
+    const distVal = seg.distance || (seg.speed > 0 ? +(seg.duration / 3600 * seg.speed).toFixed(2) : 1);
+    col1 = `<div class="field">
+      <label class="field-label">Afstand</label>
+      <div class="field-row">
+        <input type="number" min="0.1" max="50" step="0.1" value="${distVal}"
+          onchange="${prefix}.distance=+this.value;${prefix}.mode='distance'" style="width:55px;">
+        <span class="field-unit">km</span>
+      </div>
+    </div>`;
+  } else if (durUnit === 'min') {
+    const minVal = +(seg.duration / 60).toFixed(1);
+    col1 = `<div class="field">
+      <label class="field-label">Duur</label>
+      <div class="field-row">
+        <input type="number" min="0.1" max="120" step="0.5" value="${minVal}"
+          onchange="${prefix}.duration=Math.round(this.value*60);${prefix}.mode='time'" style="width:55px;">
+        <span class="field-unit">min</span>
+      </div>
+    </div>`;
+  } else {
+    col1 = `<div class="field">
+      <label class="field-label">Duur</label>
+      <div class="field-row">
+        <input type="number" min="5" max="7200" step="5" value="${seg.duration}"
+          onchange="${prefix}.duration=+this.value;${prefix}.mode='time'" style="width:60px;">
+        <span class="field-unit">sec</span>
+      </div>
+    </div>`;
+  }
+
+  // Second column: speed
+  let col2;
+  if (speedUnit === 'pace') {
+    const paceVal = kmhToPace(seg.speed);
+    col2 = `<div class="field">
+      <label class="field-label">Tempo</label>
+      <div class="field-row">
+        <input type="text" value="${paceVal}" style="width:55px;text-align:center;"
+          onchange="const v=paceToKmh(this.value);if(v>0)${prefix}.speed=Math.round(v*10)/10;"
+          placeholder="6:00">
+        <span class="field-unit">min/km</span>
+      </div>
+    </div>`;
+  } else {
+    col2 = `<div class="field">
+      <label class="field-label">Snelheid</label>
+      <div class="field-row">
+        <input type="number" min="0.5" max="18" step="0.5" value="${seg.speed}"
+          onchange="${prefix}.speed=+this.value" style="width:55px;">
+        <span class="field-unit">km/h</span>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="segment-row ${isSuper ? 'in-superset' : ''}">
+    ${col1}
+    ${col2}
+    <div class="field">
+      <label class="field-label">Incline</label>
+      <div class="field-row">
+        <input type="number" min="0" max="15" step="0.5" value="${seg.incline}"
+          onchange="${prefix}.incline=+this.value" style="width:45px;">
+        <span class="field-unit">%</span>
+      </div>
+    </div>
+    <button class="remove-btn" onclick="${removeAction}">×</button>
+  </div>`;
+}
+
+function saveWorkout() {
+  const name = document.getElementById('editorName').value.trim() || 'Workout';
+  const list = loadWorkouts();
+  if (editingId) {
+    const idx = list.findIndex(w => w.id === editingId);
+    if (idx >= 0) { list[idx].name = name; list[idx].blocks = editorBlocks; }
+  } else {
+    list.push({ id: 'w_' + Date.now(), name, blocks: editorBlocks });
+  }
+  saveWorkouts(list);
+  showView('viewHome');
+}
+
+/* =============================================
+   FLATTEN WORKOUT → EXECUTION STEPS
+   ============================================= */
+function getSegDuration(seg) {
+  if (seg.mode === 'distance' && seg.distance > 0 && seg.speed > 0) {
+    return Math.round((seg.distance / seg.speed) * 3600);
+  }
+  return seg.duration || 60;
+}
+
+function flattenWorkout(workout) {
+  const steps = [];
+  workout.blocks.forEach((block, bi) => {
+    if (block.type === 'segment') {
+      steps.push({
+        speed: block.speed, incline: block.incline, duration: getSegDuration(block),
+        label: '', blockIndex: bi,
+        displayMode: block.mode, displayDistance: block.distance
+      });
+    } else {
+      for (let r = 0; r < block.repeats; r++) {
+        block.segments.forEach((seg, si) => {
+          steps.push({
+            speed: seg.speed, incline: seg.incline, duration: getSegDuration(seg),
+            label: `Set ${r+1}/${block.repeats}`,
+            blockIndex: bi, repeatIndex: r, segIndex: si,
+            displayMode: seg.mode, displayDistance: seg.distance
+          });
+        });
+      }
+    }
+  });
+  return steps;
+}
+
+/* =============================================
+   PREVIEW
+   ============================================= */
+let previewWorkoutId = null;
+
+function speedDisplay(kmh) {
+  return speedUnit === 'pace' ? kmhToPace(kmh) + ' min/km' : kmh + ' km/h';
+}
+
+function inclineColor(pct) {
+  const stops = [
+    { p: 0,  r: 0,   g: 255, b: 136 },
+    { p: 5,  r: 251, g: 191, b: 36  },
+    { p: 10, r: 251, g: 146, b: 60  },
+    { p: 15, r: 255, g: 71,  b: 87  },
+  ];
+  const v = Math.min(Math.max(pct, 0), 15);
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (v >= stops[i].p && v <= stops[i + 1].p) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const t = hi.p === lo.p ? 0 : (v - lo.p) / (hi.p - lo.p);
+  const r = Math.round(lo.r + (hi.r - lo.r) * t);
+  const g = Math.round(lo.g + (hi.g - lo.g) * t);
+  const b = Math.round(lo.b + (hi.b - lo.b) * t);
+  return `rgb(${r},${g},${b})`;
+}
+
+function fmtDur(sec) {
+  if (sec < 60) return { val: sec, unit: 'sec' };
+  return { val: +(sec / 60).toFixed(1), unit: 'min' };
+}
+
+function fmtDist(km) {
+  if (km < 1) return { val: Math.round(km * 1000), unit: 'm' };
+  return { val: +km.toFixed(2), unit: 'km' };
+}
+
+function previewTableHead() {
+  return `<colgroup>
+    <col style="width:22%"><col style="width:22%"><col style="width:18%"><col style="width:20%"><col style="width:18%">
+  </colgroup>
+  <tr>
+    <th>Duur</th><th>Afstand</th><th>km/h</th><th>min/km</th><th>Incl.</th>
+  </tr>`;
+}
+
+function previewTableRow(seg) {
+  const dur = getSegDuration(seg);
+  const d = fmtDur(dur);
+  const dist = seg.speed > 0 ? (seg.mode === 'distance' && seg.distance ? seg.distance : +(dur / 3600 * seg.speed).toFixed(3)) : 0;
+  const ds = fmtDist(dist);
+  const pace = seg.speed > 0 ? kmhToPace(seg.speed) : '--:--';
+  return `<tr>
+    <td>${d.val} <small>${d.unit}</small></td>
+    <td>${ds.val} <small>${ds.unit}</small></td>
+    <td style="color:var(--green);font-weight:600;">${seg.speed}</td>
+    <td>${pace}</td>
+    <td>${seg.incline > 0 ? `${seg.incline}%` : '<span style="color:var(--muted);">0%</span>'}</td>
+  </tr>`;
+}
+
+function openPreview(id) {
+  previewWorkoutId = id;
+  const w = loadWorkouts().find(w => w.id === id);
+  if (!w) return;
+  const steps = flattenWorkout(w);
+  const totalSec = steps.reduce((s, st) => s + st.duration, 0);
+  const maxSpeed = Math.max(...steps.map(s => s.speed));
+  const maxIncline = Math.max(...steps.map(s => s.incline));
+
+  document.getElementById('previewName').textContent = w.name;
+  document.getElementById('previewStats').innerHTML =
+    `<span>${steps.length} stappen</span><span>${fmtTime(totalSec)}</span><span>max ${speedDisplay(maxSpeed)}</span>`;
+
+  // --- SVG Chart ---
+  const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
+  const plotW = cW - padL - padR, plotH = cH - padT - padB;
+  const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+
+  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+
+  const ySteps = Math.min(5, yMax);
+  for (let i = 0; i <= ySteps; i++) {
+    const val = (yMax / ySteps) * i;
+    const y = padT + plotH - (val / yMax) * plotH;
+    svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="#d1d9e6" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 4}" y="${y + 3}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+  }
+
+  let xOffset = 0;
+  steps.forEach(s => {
+    const x = padL + (xOffset / totalSec) * plotW;
+    const bw = (s.duration / totalSec) * plotW;
+    const h = (s.speed / yMax) * plotH;
+    const y = padT + plotH - h;
+    svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85"/>`;
+    if (bw > 18 && h > 12) {
+      svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
+    }
+    xOffset += s.duration;
+  });
+
+  const xLabelCount = Math.min(6, Math.ceil(totalSec / 60));
+  for (let i = 0; i <= xLabelCount; i++) {
+    const sec = Math.round((totalSec / xLabelCount) * i);
+    const x = padL + (sec / totalSec) * plotW;
+    svg += `<text x="${x}" y="${cH - 4}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+  }
+
+  svg += `<text x="${padL}" y="${padT - 1}" fill="#6b7a90" font-size="6" font-family="var(--mono)">km/h</text>`;
+
+  if (maxIncline > 0) {
+    const lgX = padL + plotW - 60;
+    for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
+    svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="#6b7a90" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
+    svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="#6b7a90" font-size="5" font-family="var(--mono)">15%</text>`;
+  }
+
+  svg += '</svg>';
+  document.getElementById('previewChart').innerHTML = svg;
+
+  // --- Block-structured table list ---
+  const tblStyle = `width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:0.75rem;`;
+  const thStyle = `text-align:left;padding:0.3rem 0.5rem;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);`;
+  const tdStyle = `padding:0.35rem 0.5rem;border-bottom:1px solid var(--border);`;
+
+  let blocksHtml = '<style>.prev-tbl th{' + thStyle + '}.prev-tbl td{' + tdStyle + '}</style>';
+
+  w.blocks.forEach((block, bi) => {
+    if (block.type === 'segment') {
+      blocksHtml += `<table class="prev-tbl" style="${tblStyle}margin-bottom:0.5rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
+        ${previewTableHead()}
+        ${previewTableRow(block)}
+      </table>`;
+    } else {
+      blocksHtml += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.5rem;overflow:hidden;">`;
+      blocksHtml += `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.65rem;background:var(--s2);border-bottom:1px solid var(--border);">
+        <span class="tag tag-repeat">⟳ ${block.repeats}× herhalen</span>
+        <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">${fmtTime(block.segments.reduce((t, s) => t + getSegDuration(s), 0) * block.repeats)} totaal</span>
+      </div>`;
+      blocksHtml += `<table class="prev-tbl" style="${tblStyle}">
+        ${previewTableHead()}
+        ${block.segments.map(seg => previewTableRow(seg)).join('')}
+      </table>`;
+      blocksHtml += `</div>`;
+    }
+  });
+  document.getElementById('previewBlocks').innerHTML = blocksHtml;
+
+  showView('viewPreview');
+}
+
+/* =============================================
+   RUNNER (WORKOUT EXECUTION)
+   ============================================= */
+let runSteps = [];
+let runIndex = 0;
+let runSegElapsed = 0;  // seconds into current segment
+let runTotalElapsed = 0;
+let runTotalDuration = 0;
+let runTimer = null;
+let runPaused = false;
+let runAudioCtx = null;
+let runCalcDistance = 0; // calculated distance in km
+
+async function startRunner() {
+  const w = loadWorkouts().find(w => w.id === previewWorkoutId);
+  if (!w) return;
+  runSteps = flattenWorkout(w);
+  runIndex = 0;
+  runSegElapsed = 0;
+  runTotalElapsed = 0;
+  runTotalDuration = runSteps.reduce((s, st) => s + st.duration, 0);
+  runPaused = false;
+  runCalcDistance = 0;
+
+  showView('viewRunner');
+  renderRunChart();
+  updateRunUI();
+
+  document.getElementById('runBtnPause').disabled = true;
+  document.getElementById('runBtnStop').disabled = false;
+  document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
+
+  // Start belt and wait until speed is reached
+  await startAndSetSpeed(runSteps[0].speed, runSteps[0].incline);
+
+  document.getElementById('runBtnPause').disabled = false;
+  document.getElementById('runBtnPause').textContent = '⏸ Pauze';
+
+  // NOW start the countdown timer
+  if (runTimer) clearInterval(runTimer);
+  runTimer = setInterval(runTick, 1000);
+}
+
+function runTick() {
+  if (runPaused) return;
+  runSegElapsed++;
+  runTotalElapsed++;
+  // Accumulate distance: speed (km/h) / 3600 = km per second
+  const curStep = runSteps[runIndex];
+  if (curStep) runCalcDistance += curStep.speed / 3600;
+
+  const step = runSteps[runIndex];
+  if (runSegElapsed >= step.duration) {
+    // Next segment
+    runIndex++;
+    runSegElapsed = 0;
+    if (runIndex >= runSteps.length) {
+      finishRunner();
+      return;
+    }
+    const next = runSteps[runIndex];
+    // Hammer speed command 4 times over 2 seconds
+    (async () => {
+      for (let i = 0; i < 4; i++) {
+        await sendFTMSSpeed(next.speed);
+        await delay(100);
+        await sendFTMSIncline(next.incline);
+        await delay(400);
+      }
+    })();
+    playBeep();
+  }
+
+  updateRunUI();
+}
+
+async function togglePause() {
+  if (!runPaused) {
+    // PAUSE
+    runPaused = true;
+    if (runTimer) clearInterval(runTimer);
+    runTimer = null;
+    document.getElementById('runBtnPause').textContent = '▶ Hervat';
+    document.getElementById('runSegLabel').textContent = '⏸ Gepauzeerd';
+    await bleWrite([0x08, 0x02]); // FTMS pause
+  } else {
+    // RESUME
+    document.getElementById('runBtnPause').disabled = true;
+    document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
+
+    const step = runSteps[runIndex];
+    if (!step) return;
+    await startAndSetSpeed(step.speed, step.incline);
+
+    runPaused = false;
+    document.getElementById('runBtnPause').disabled = false;
+    document.getElementById('runBtnPause').textContent = '⏸ Pauze';
+
+    // Resume the countdown timer
+    runTimer = setInterval(runTick, 1000);
+  }
+}
+
+async function stopRunner() {
+  if (runTimer) clearInterval(runTimer);
+  runTimer = null;
+  await sendFTMSStop();
+  showView('viewHome');
+}
+
+async function finishRunner() {
+  if (runTimer) clearInterval(runTimer);
+  runTimer = null;
+  document.getElementById('runSegLabel').textContent = '✅ Workout voltooid!';
+  document.getElementById('runSegTimer').textContent = '🎉';
+  document.getElementById('runSpeed').textContent = '0.0';
+  document.getElementById('runPace').textContent = '--:--';
+  document.getElementById('runBtnPause').disabled = true;
+  await sendFTMSStop();
+  playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
+}
+
+function formatPhase() {
+  const step = runSteps[runIndex];
+  if (step?.label) return step.label;
+  return `Stap ${runIndex + 1} / ${runSteps.length}`;
+}
+
+// Chart constants (shared between renderRunChart and updateRunUI)
+const CH_W = 380, CH_H = 140, CH_PL = 32, CH_PR = 8, CH_PT = 8, CH_PB = 22;
+const CH_PLOTW = CH_W - CH_PL - CH_PR, CH_PLOTH = CH_H - CH_PT - CH_PB;
+
+function renderRunChart() {
+  const maxSpeed = Math.max(...runSteps.map(s => s.speed));
+  const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+
+  let svg = `<svg viewBox="0 0 ${CH_W} ${CH_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;" id="runSvg">`;
+
+  // Grid lines
+  const ySteps = Math.min(5, yMax);
+  for (let i = 0; i <= ySteps; i++) {
+    const val = (yMax / ySteps) * i;
+    const y = CH_PT + CH_PLOTH - (val / yMax) * CH_PLOTH;
+    svg += `<line x1="${CH_PL}" y1="${y}" x2="${CH_PL + CH_PLOTW}" y2="${y}" stroke="#d1d9e6" stroke-width="0.5"/>`;
+    svg += `<text x="${CH_PL - 4}" y="${y + 3}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+  }
+
+  // Segment bars
+  let xOff = 0;
+  runSteps.forEach((s, i) => {
+    const x = CH_PL + (xOff / runTotalDuration) * CH_PLOTW;
+    const bw = (s.duration / runTotalDuration) * CH_PLOTW;
+    const h = (s.speed / yMax) * CH_PLOTH;
+    const y = CH_PT + CH_PLOTH - h;
+    svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85" id="runBar${i}"/>`;
+    if (bw > 18 && h > 12) {
+      svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
+    }
+    xOff += s.duration;
+  });
+
+  // Dimming overlay for completed area
+  svg += `<rect id="runDimRect" x="${CH_PL}" y="${CH_PT}" width="0" height="${CH_PLOTH}" fill="rgba(244,245,247,0.6)"/>`;
+
+  // Position line
+  svg += `<line id="runPosLine" x1="${CH_PL}" y1="${CH_PT}" x2="${CH_PL}" y2="${CH_PT + CH_PLOTH}" stroke="#dc2626" stroke-width="2"/>`;
+
+  // X-axis labels
+  const xLabelCount = Math.min(6, Math.ceil(runTotalDuration / 60));
+  for (let i = 0; i <= xLabelCount; i++) {
+    const sec = Math.round((runTotalDuration / xLabelCount) * i);
+    const x = CH_PL + (sec / runTotalDuration) * CH_PLOTW;
+    svg += `<text x="${x}" y="${CH_H - 4}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+  }
+
+  svg += `<text x="${CH_PL}" y="${CH_PT - 1}" fill="#6b7a90" font-size="6" font-family="var(--mono)">km/h</text>`;
+  svg += '</svg>';
+  document.getElementById('runChartSvg').innerHTML = svg;
+}
+
+function updateRunUI() {
+  const step = runSteps[runIndex];
+  if (!step) return;
+
+  // Current speed and pace
+  document.getElementById('runSpeed').textContent = step.speed.toFixed(1);
+  document.getElementById('runPace').textContent = step.speed > 0 ? kmhToPace(step.speed) : '--:--';
+
+  // Segment label
+  document.getElementById('runSegLabel').textContent = `${formatPhase()} — stap ${runIndex + 1}/${runSteps.length}`;
+
+  // Countdown timer
+  const remaining = step.duration - runSegElapsed;
+  document.getElementById('runSegTimer').textContent = fmtTime(remaining);
+  document.getElementById('runSegTimer').style.color = remaining <= 5 ? 'var(--amber)' : 'var(--cyan)';
+
+  // Segment progress bar
+  const segPct = step.duration > 0 ? (runSegElapsed / step.duration * 100) : 0;
+  document.getElementById('runSegProgress').style.width = segPct + '%';
+
+  // Totals
+  document.getElementById('runTotalDist').textContent = runCalcDistance.toFixed(2);
+  document.getElementById('runTotalTime').textContent = fmtTime(runTotalElapsed);
+
+  // Next segment
+  const nextBox = document.getElementById('runNextBox');
+  if (runIndex + 1 < runSteps.length) {
+    const ns = runSteps[runIndex + 1];
+    nextBox.style.display = '';
+    document.getElementById('runNextSpeed').textContent = ns.speed.toFixed(1);
+    document.getElementById('runNextPace').textContent = ns.speed > 0 ? kmhToPace(ns.speed) : '--:--';
+    document.getElementById('runNextTime').textContent = fmtTime(ns.duration);
+  } else {
+    nextBox.style.display = 'none';
+  }
+
+  // Chart position line + dim overlay
+  const posX = CH_PL + (runTotalElapsed / runTotalDuration) * CH_PLOTW;
+  const posLine = document.getElementById('runPosLine');
+  const dimRect = document.getElementById('runDimRect');
+  if (posLine) { posLine.setAttribute('x1', posX); posLine.setAttribute('x2', posX); }
+  if (dimRect) { dimRect.setAttribute('width', Math.max(0, posX - CH_PL)); }
+}
+
+/* =============================================
+   AUDIO
+   ============================================= */
+function playBeep() {
+  try {
+    if (!runAudioCtx) runAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = runAudioCtx.createOscillator();
+    const gain = runAudioCtx.createGain();
+    osc.connect(gain); gain.connect(runAudioCtx.destination);
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.3, runAudioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, runAudioCtx.currentTime + 0.15);
+    osc.start(); osc.stop(runAudioCtx.currentTime + 0.15);
+  } catch {}
+}
+
+/* =============================================
+   BLE — FitShow for control, FTMS for data
+   ============================================= */
+const FTMS_SERVICE = 0x1826;
+const CHAR_CONTROL = 0x2AD9;
+const CHAR_TREADMILL_DATA = 0x2ACD;
+
+let bleDevice = null, bleServer = null, bleControl = null, bleTreadmillData = null;
+let actualSpeed = 0; // live speed reported by treadmill
+
+async function bleConnect() {
+  if (!navigator.bluetooth) { alert('Web Bluetooth niet beschikbaar — gebruik Chrome!'); return; }
+  try {
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [FTMS_SERVICE] }],
+      optionalServices: [0xFFF0]
+    });
+    bleDevice.addEventListener('gattserverdisconnected', () => { updateConnUI(false); });
+    bleServer = await bleDevice.gatt.connect();
+    const svc = await bleServer.getPrimaryService(FTMS_SERVICE);
+
+    bleControl = await svc.getCharacteristic(CHAR_CONTROL);
+    try { await bleControl.startNotifications(); } catch {}
+
+    try {
+      bleTreadmillData = await svc.getCharacteristic(CHAR_TREADMILL_DATA);
+      bleTreadmillData.addEventListener('characteristicvaluechanged', onTreadmillData);
+      await bleTreadmillData.startNotifications();
+    } catch {}
+
+    updateConnUI(true);
+    // Request control, don't start belt
+    await bleWrite([0x00]);
+  } catch (err) {
+    console.error(err);
+    alert('Verbinding mislukt: ' + err.message);
+  }
+}
+
+function bleDisconnect() {
+  if (bleDevice?.gatt?.connected) bleDevice.gatt.disconnect();
+  updateConnUI(false);
+}
+
+function updateConnUI(connected) {
+  document.getElementById('dot').className = connected ? 'conn-dot on' : 'conn-dot';
+  document.getElementById('connLabel').textContent = connected ? bleDevice?.name || 'Verbonden' : 'Niet verbonden';
+  document.getElementById('btnConn').classList.toggle('hidden', connected);
+  document.getElementById('btnDisc').classList.toggle('hidden', !connected);
+}
+
+const delay = ms => new Promise(r => setTimeout(r, ms));
+
+async function bleWrite(bytes) {
+  if (!bleControl) return;
+  try { await bleControl.writeValueWithResponse(new Uint8Array(bytes)); }
+  catch (e) { console.warn('BLE write error:', e); }
+}
+
+async function sendFTMSSpeed(kmh) {
+  const raw = Math.round(kmh * 100);
+  await bleWrite([0x02, raw & 0xFF, (raw >> 8) & 0xFF]);
+}
+
+async function sendFTMSIncline(pct) {
+  const raw = Math.round(pct * 10);
+  await bleWrite([0x03, raw & 0xFF, (raw >> 8) & 0xFF]);
+}
+
+async function sendFTMSStop() {
+  await bleWrite([0x08, 0x01]);
+}
+
+// Start belt and hammer speed commands over a few seconds
+async function startAndSetSpeed(kmh, incline) {
+  await bleWrite([0x07]); // FTMS Start
+
+  // Belt needs time to physically start. Send speed repeatedly
+  // over 4 seconds — the motor controller ignores commands during ramp-up
+  for (let i = 0; i < 8; i++) {
+    await delay(500);
+    await sendFTMSSpeed(kmh);
+    await delay(100);
+    await sendFTMSIncline(incline);
+  }
+  console.log('startAndSetSpeed done, sent speed', kmh, '8 times over 4s');
+}
+
+function onTreadmillData(event) {
+  const dv = event.target.value;
+  if (dv.byteLength < 4) return;
+  const flags = dv.getUint16(0, true);
+  let offset = 2;
+
+  // Instantaneous Speed — always present (uint16, 0.01 km/h)
+  const speed = dv.getUint16(offset, true) / 100;
+  offset += 2;
+  actualSpeed = speed;
+
+  // Bit 1: Average Speed
+  if (flags & 0x0002) offset += 2;
+
+  // Bit 2: Total Distance (uint24)
+  if (flags & 0x0004) {
+    try {
+      const dist = dv.getUint8(offset) | (dv.getUint8(offset+1) << 8) | (dv.getUint8(offset+2) << 16);
+      const el = document.getElementById('statDist');
+      if (el) el.textContent = (dist / 1000).toFixed(2);
+    } catch {}
+    offset += 3;
+  }
+
+  // Bit 3: Inclination (int16, 0.1%)
+  if (flags & 0x0008) {
+    try {
+      const incl = dv.getInt16(offset, true) / 10;
+      const el = document.getElementById('statIncline');
+      if (el) el.textContent = incl.toFixed(1);
+    } catch {}
+    offset += 4; // incl + ramp angle
+  }
+
+  // Bit 4: Elevation Gain
+  if (flags & 0x0010) offset += 4;
+  // Bit 5: Inst Pace
+  if (flags & 0x0020) offset += 2;
+  // Bit 6: Avg Pace
+  if (flags & 0x0040) offset += 2;
+
+  // Bit 7: Expended Energy
+  if (flags & 0x0080) {
+    try {
+      const cals = dv.getUint16(offset, true);
+      const el = document.getElementById('statCals');
+      if (el) el.textContent = cals;
+    } catch {}
+    offset += 5; // total + per hour + per min
+  }
+
+  // Bit 8: Heart Rate
+  if (flags & 0x0100) offset += 1;
+  // Bit 9: Metabolic Equivalent
+  if (flags & 0x0200) offset += 1;
+
+  // Bit 10: Elapsed Time
+  if (flags & 0x0400) {
+    try {
+      const sec = dv.getUint16(offset, true);
+      const m = Math.floor(sec / 60);
+      const s = sec % 60;
+      const el = document.getElementById('statTime');
+      if (el) el.textContent = `${m}:${s.toString().padStart(2,'0')}`;
+    } catch {}
+  }
+}
+
+/* =============================================
+   UTILS
+   ============================================= */
+function fmtTime(sec) {
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function esc(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+/* =============================================
+   INIT
+   ============================================= */
+renderWorkoutList();
+</script>
+</body>
+</html>
