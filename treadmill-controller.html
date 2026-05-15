@@ -419,6 +419,14 @@ input:focus { border-color:var(--cyan); }
      ========================================= -->
 <div class="view" id="viewRunner" style="display:none;">
   <div id="runnerLayout">
+    <!-- EMERGENCY OVERLAY -->
+    <div id="emergencyOverlay" style="display:none;position:fixed;inset:0;z-index:999;background:rgba(220,38,38,0.95);display:none;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;">
+      <div style="font-size:3rem;margin-bottom:1rem;">⚠️</div>
+      <div style="font-family:var(--ui);font-size:1.5rem;font-weight:800;color:#fff;margin-bottom:0.5rem;">NOODSTOP</div>
+      <div id="emergencyMsg" style="font-family:var(--ui);font-size:1rem;color:rgba(255,255,255,0.9);margin-bottom:0.5rem;white-space:pre-line;">Gebruik de fysieke noodstop op de loopband!</div>
+      <div style="font-family:var(--ui);font-size:0.8rem;color:rgba(255,255,255,0.7);margin-bottom:1.5rem;">De app probeert de loopband te stoppen.<br>Vertrouw hier NIET op — gebruik altijd de fysieke noodstop.</div>
+      <button id="emergencyDismissBtn" onclick="dismissEmergency()" disabled style="font-family:var(--ui);font-weight:700;font-size:1rem;padding:1rem 2rem;border-radius:var(--r);background:#fff;color:#dc2626;border:none;cursor:pointer;">Wacht...</button>
+    </div>
     <!-- Left / Top: Chart -->
     <div id="runnerChart">
       <div id="runChartWrap" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem 0.4rem 0.2rem 0.4rem;overflow:hidden;height:100%;">
@@ -436,6 +444,7 @@ input:focus { border-color:var(--cyan); }
             <div>
               <span id="runSpeed" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--green);">0.0</span>
               <span style="font-size:0.65rem;color:var(--muted);">km/h</span>
+              <div id="runActualSpeed" style="display:none;font-family:var(--mono);font-size:0.6rem;"></div>
             </div>
             <div>
               <span id="runPace" style="font-family:var(--mono);font-size:1.1rem;font-weight:600;">--:--</span>
@@ -990,9 +999,23 @@ let runAudioCtx = null;
 let runCalcDistance = 0; // calculated distance in km
 
 async function startRunner() {
+  // P0: Block start if not connected
+  if (!isBleConnected()) {
+    alert('Verbind eerst met de loopband!');
+    return;
+  }
+
   const w = loadWorkouts().find(w => w.id === previewWorkoutId);
   if (!w) return;
   runSteps = flattenWorkout(w);
+
+  // P1: Validate all steps
+  for (const s of runSteps) {
+    s.speed = Math.max(0, Math.min(18, Number(s.speed) || 0));
+    s.incline = Math.max(0, Math.min(15, Number(s.incline) || 0));
+    s.duration = Math.max(1, Math.min(7200, Math.round(Number(s.duration) || 60)));
+  }
+
   runIndex = 0;
   runSegElapsed = 0;
   runTotalElapsed = 0;
@@ -1000,7 +1023,6 @@ async function startRunner() {
   runPaused = false;
   runCalcDistance = 0;
 
-  // Fullscreen + keep screen on
   enterFullscreen();
   acquireWakeLock();
 
@@ -1012,13 +1034,12 @@ async function startRunner() {
   document.getElementById('runBtnStop').disabled = false;
   document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
 
-  // Start belt and wait until speed is reached
-  await startAndSetSpeed(runSteps[0].speed, runSteps[0].incline);
+  const ok = await startAndSetSpeed(runSteps[0].speed, runSteps[0].incline);
+  if (!ok) return; // emergency mode already entered
 
   document.getElementById('runBtnPause').disabled = false;
   document.getElementById('runBtnPause').textContent = '⏸ Pauze';
 
-  // NOW start the countdown timer
   if (runTimer) clearInterval(runTimer);
   runTimer = setInterval(runTick, 1000);
 }
@@ -1027,13 +1048,11 @@ function runTick() {
   if (runPaused) return;
   runSegElapsed++;
   runTotalElapsed++;
-  // Accumulate distance: speed (km/h) / 3600 = km per second
   const curStep = runSteps[runIndex];
   if (curStep) runCalcDistance += curStep.speed / 3600;
 
   const step = runSteps[runIndex];
   if (runSegElapsed >= step.duration) {
-    // Next segment
     runIndex++;
     runSegElapsed = 0;
     if (runIndex >= runSteps.length) {
@@ -1041,13 +1060,18 @@ function runTick() {
       return;
     }
     const next = runSteps[runIndex];
-    // Hammer speed command 4 times over 2 seconds
+    // P1: Segment transition with error handling
     (async () => {
+      let failCount = 0;
       for (let i = 0; i < 4; i++) {
-        await sendFTMSSpeed(next.speed);
+        const speedOk = await sendFTMSSpeed(next.speed);
         await delay(100);
-        await sendFTMSIncline(next.incline);
+        const inclOk = await sendFTMSIncline(next.incline);
         await delay(400);
+        if (!speedOk || !inclOk) failCount++;
+      }
+      if (failCount >= 3) {
+        enterEmergency('Segmentwisseling mislukt!\nSnelheidscommando wordt niet geaccepteerd.');
       }
     })();
     playBeep();
@@ -1064,21 +1088,29 @@ async function togglePause() {
     runTimer = null;
     document.getElementById('runBtnPause').textContent = '▶ Hervat';
     document.getElementById('runSegLabel').textContent = '⏸ Gepauzeerd';
-    await bleWrite([0x08, 0x02]); // FTMS pause
+    const resp = await bleWriteVerified([0x08, 0x02], 0x08);
+    // P0: If pause command fails, enter emergency
+    if (!resp.success) {
+      enterEmergency(`Pauze-commando mislukt: ${resp.reason}.\nLoopband kan nog draaien.`);
+    }
   } else {
-    // RESUME
+    // RESUME — check connection first
+    if (!isBleConnected()) {
+      enterEmergency('Bluetooth niet meer verbonden!\nKan niet hervatten.');
+      return;
+    }
     document.getElementById('runBtnPause').disabled = true;
     document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
 
     const step = runSteps[runIndex];
     if (!step) return;
-    await startAndSetSpeed(step.speed, step.incline);
+    const ok = await startAndSetSpeed(step.speed, step.incline);
+    if (!ok) return;
 
     runPaused = false;
     document.getElementById('runBtnPause').disabled = false;
     document.getElementById('runBtnPause').textContent = '⏸ Pauze';
 
-    // Resume the countdown timer
     runTimer = setInterval(runTick, 1000);
   }
 }
@@ -1086,9 +1118,14 @@ async function togglePause() {
 async function stopRunner() {
   if (runTimer) clearInterval(runTimer);
   runTimer = null;
+  const ok = await sendFTMSStop();
+  if (!ok) {
+    enterEmergency('Stop-commando mislukt!\nGebruik de fysieke noodstop!');
+    return;
+  }
+  // Only release after confirmed stop
   releaseWakeLock();
   exitFullscreen();
-  await sendFTMSStop();
   showView('viewHome');
 }
 
@@ -1100,7 +1137,11 @@ async function finishRunner() {
   document.getElementById('runSpeed').textContent = '0.0';
   document.getElementById('runPace').textContent = '--:--';
   document.getElementById('runBtnPause').disabled = true;
-  await sendFTMSStop();
+  const ok = await sendFTMSStop();
+  if (!ok) {
+    enterEmergency('Stop-commando mislukt na voltooiing!\nGebruik de fysieke noodstop.');
+    return;
+  }
   playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
 }
 
@@ -1176,9 +1217,40 @@ function updateRunUI() {
   const step = runSteps[runIndex];
   if (!step) return;
 
-  // Current speed and pace
+  // Current speed and pace (planned)
   document.getElementById('runSpeed').textContent = step.speed.toFixed(1);
   document.getElementById('runPace').textContent = step.speed > 0 ? kmhToPace(step.speed) : '--:--';
+
+  // P0: Speed mismatch & telemetry freshness monitoring
+  const actualEl = document.getElementById('runActualSpeed');
+  if (actualEl) {
+    const telemetryAge = Date.now() - lastTelemetryTime;
+    const telemetryStale = lastTelemetryTime > 0 && telemetryAge > STALE_TELEMETRY_MS;
+
+    if (telemetryStale) {
+      actualEl.textContent = `geen telemetrie al ${Math.round(telemetryAge/1000)}s!`;
+      actualEl.style.color = 'var(--red)';
+      actualEl.style.display = '';
+      enterEmergency(`Geen telemetrie ontvangen voor ${Math.round(telemetryAge/1000)}s.\nStatus van de loopband is onbekend.`);
+      return;
+    } else {
+      actualEl.textContent = `werkelijk: ${actualSpeed.toFixed(1)} km/h`;
+      const diff = Math.abs(actualSpeed - step.speed);
+      actualEl.style.color = diff > 1.0 ? 'var(--red)' : 'var(--muted)';
+      actualEl.style.display = '';
+
+      // Mismatch: includes actual=0 when target>0 (belt didn't start)
+      if (diff > 2.0 && runTotalElapsed > 8) {
+        speedMismatchCount++;
+        if (speedMismatchCount >= MISMATCH_THRESHOLD) {
+          enterEmergency(`Snelheid wijkt al ${MISMATCH_THRESHOLD}s af!\nDoel: ${step.speed} km/h — Werkelijk: ${actualSpeed.toFixed(1)} km/h`);
+          return;
+        }
+      } else {
+        speedMismatchCount = 0;
+      }
+    }
+  }
 
   // Segment label
   document.getElementById('runSegLabel').textContent = `${formatPhase()} — stap ${runIndex + 1}/${runSteps.length}`;
@@ -1240,7 +1312,9 @@ const CHAR_CONTROL = 0x2AD9;
 const CHAR_TREADMILL_DATA = 0x2ACD;
 
 let bleDevice = null, bleServer = null, bleControl = null, bleTreadmillData = null;
-let actualSpeed = 0; // live speed reported by treadmill
+let actualSpeed = 0;
+let lastTelemetryTime = 0; // timestamp of last treadmill data
+let hasControl = false; // true only after Request Control is verified
 
 async function bleConnect() {
   if (!navigator.bluetooth) { alert('Web Bluetooth niet beschikbaar — gebruik Chrome!'); return; }
@@ -1249,12 +1323,15 @@ async function bleConnect() {
       filters: [{ services: [FTMS_SERVICE] }],
       optionalServices: [0xFFF0]
     });
-    bleDevice.addEventListener('gattserverdisconnected', () => { updateConnUI(false); });
+    bleDevice.addEventListener('gattserverdisconnected', onBleDisconnect);
     bleServer = await bleDevice.gatt.connect();
     const svc = await bleServer.getPrimaryService(FTMS_SERVICE);
 
     bleControl = await svc.getCharacteristic(CHAR_CONTROL);
-    try { await bleControl.startNotifications(); } catch {}
+    try {
+      bleControl.addEventListener('characteristicvaluechanged', onControlIndication);
+      await bleControl.startNotifications();
+    } catch {}
 
     try {
       bleTreadmillData = await svc.getCharacteristic(CHAR_TREADMILL_DATA);
@@ -1262,18 +1339,43 @@ async function bleConnect() {
       await bleTreadmillData.startNotifications();
     } catch {}
 
-    updateConnUI(true);
-    // Request control, don't start belt
-    await bleWrite([0x00]);
+    // P1: Verify Request Control before marking as connected
+    const ctrlResp = await bleWriteVerified([0x00], 0x00);
+    if (ctrlResp.success) {
+      hasControl = true;
+      updateConnUI(true);
+    } else {
+      hasControl = false;
+      updateConnUI(false);
+      alert(`Loopband weigerde control: ${ctrlResp.reason}. Probeer opnieuw.`);
+      bleDevice.gatt.disconnect();
+    }
   } catch (err) {
     console.error(err);
     alert('Verbinding mislukt: ' + err.message);
   }
 }
 
+function onBleDisconnect() {
+  hasControl = false;
+  updateConnUI(false);
+  if (isRunnerActive()) {
+    enterEmergency('Bluetooth verbinding verloren!\nDe app kan de loopband niet meer aansturen.');
+  }
+}
+
 function bleDisconnect() {
+  hasControl = false;
   if (bleDevice?.gatt?.connected) bleDevice.gatt.disconnect();
   updateConnUI(false);
+}
+
+function isBleConnected() {
+  return hasControl && bleControl && bleDevice?.gatt?.connected;
+}
+
+function isRunnerActive() {
+  return runTimer !== null || document.getElementById('viewRunner')?.classList.contains('active');
 }
 
 function updateConnUI(connected) {
@@ -1285,44 +1387,221 @@ function updateConnUI(connected) {
 
 const delay = ms => new Promise(r => setTimeout(r, ms));
 
-async function bleWrite(bytes) {
-  if (!bleControl) return;
-  try { await bleControl.writeValueWithResponse(new Uint8Array(bytes)); }
-  catch (e) { console.warn('BLE write error:', e); }
+/* --- FTMS Control Point response verification --- */
+let ctrlResolve = null;
+let ctrlTimeout = null;
+let ctrlExpectedOpcode = null;
+let ctrlPending = false; // P1: concurrency guard
+
+function onControlIndication(event) {
+  const v = event.target.value;
+  const bytes = new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  if (bytes[0] !== 0x80 || bytes.length < 3 || !ctrlResolve) return;
+
+  const responseOpcode = bytes[1];
+  const resultCode = bytes[2];
+
+  // P0: Only resolve if opcode matches what we're waiting for
+  if (responseOpcode !== ctrlExpectedOpcode) {
+    console.warn(`FTMS response opcode mismatch: expected 0x${ctrlExpectedOpcode?.toString(16)}, got 0x${responseOpcode.toString(16)}`);
+    return; // Ignore stale/wrong response
+  }
+
+  // P2: Human-readable result codes
+  const FTMS_RESULTS = {
+    0x01: 'success',
+    0x02: 'not supported',
+    0x03: 'invalid parameter',
+    0x04: 'operation failed',
+    0x05: 'not permitted',
+  };
+  const reason = FTMS_RESULTS[resultCode] || `unknown result 0x${resultCode.toString(16)}`;
+
+  ctrlResolve({
+    opcode: responseOpcode, result: resultCode,
+    success: resultCode === 0x01,
+    reason: resultCode !== 0x01 ? `control point rejected: ${reason}` : undefined
+  });
+  ctrlResolve = null;
+  ctrlExpectedOpcode = null;
+  ctrlPending = false;
+  if (ctrlTimeout) { clearTimeout(ctrlTimeout); ctrlTimeout = null; }
 }
 
+// Low-level BLE write (no verification)
+async function bleWriteRaw(bytes) {
+  if (!bleControl) return false;
+  try {
+    await bleControl.writeValueWithResponse(new Uint8Array(bytes));
+    return true;
+  } catch (e) {
+    console.warn('BLE write error:', e);
+    return false;
+  }
+}
+
+// P0+P1: Write and wait for FTMS confirmation, with opcode matching and concurrency guard
+async function bleWriteVerified(bytes, expectedOpcode, timeoutMs = 3000) {
+  if (!bleControl) return { success: false, reason: 'not connected' };
+
+  // P1: Reject if another verified write is pending
+  if (ctrlPending) {
+    console.warn('bleWriteVerified: another command is pending, waiting...');
+    // Wait up to 4s for previous command to finish
+    for (let i = 0; i < 40 && ctrlPending; i++) await delay(100);
+    if (ctrlPending) return { success: false, reason: 'previous command still pending' };
+  }
+
+  ctrlPending = true;
+  ctrlExpectedOpcode = expectedOpcode;
+
+  const responsePromise = new Promise(resolve => {
+    ctrlResolve = resolve;
+    ctrlTimeout = setTimeout(() => {
+      ctrlResolve = null;
+      ctrlExpectedOpcode = null;
+      ctrlPending = false;
+      resolve({ success: false, reason: 'timeout' });
+    }, timeoutMs);
+  });
+
+  try {
+    await bleControl.writeValueWithResponse(new Uint8Array(bytes));
+  } catch (e) {
+    if (ctrlTimeout) clearTimeout(ctrlTimeout);
+    ctrlResolve = null;
+    ctrlExpectedOpcode = null;
+    ctrlPending = false;
+    return { success: false, reason: 'write failed: ' + e.message };
+  }
+
+  const resp = await responsePromise;
+  console.log(`FTMS verified [0x${expectedOpcode.toString(16)}]: ${resp.success ? 'OK' : resp.reason || 'result=0x'+resp.result?.toString(16)}`);
+  return resp;
+}
+
+// Speed/incline: fire-and-forget with clamping
 async function sendFTMSSpeed(kmh) {
-  const raw = Math.round(kmh * 100);
-  await bleWrite([0x02, raw & 0xFF, (raw >> 8) & 0xFF]);
+  const clamped = Math.max(0, Math.min(18, Number(kmh) || 0));
+  const raw = Math.round(clamped * 100);
+  return await bleWriteRaw([0x02, raw & 0xFF, (raw >> 8) & 0xFF]);
 }
 
 async function sendFTMSIncline(pct) {
-  const raw = Math.round(pct * 10);
-  await bleWrite([0x03, raw & 0xFF, (raw >> 8) & 0xFF]);
+  const clamped = Math.max(0, Math.min(15, Number(pct) || 0));
+  const raw = Math.round(clamped * 10);
+  return await bleWriteRaw([0x03, raw & 0xFF, (raw >> 8) & 0xFF]);
 }
 
+// Stop uses verified write
 async function sendFTMSStop() {
-  await bleWrite([0x08, 0x01]);
+  const resp = await bleWriteVerified([0x08, 0x01], 0x08);
+  return resp.success;
 }
 
-// Start belt and hammer speed commands over a few seconds
+// Start belt and hammer speed commands
 async function startAndSetSpeed(kmh, incline) {
-  await bleWrite([0x07]); // FTMS Start
+  const startResp = await bleWriteVerified([0x07], 0x07);
+  if (!startResp.success && isRunnerActive()) {
+    enterEmergency(`Start-commando mislukt: ${startResp.reason}.\nLoopband reageerde niet.`);
+    return false;
+  }
 
-  // Belt needs time to physically start. Send speed repeatedly
-  // over 4 seconds — the motor controller ignores commands during ramp-up
+  let failCount = 0;
   for (let i = 0; i < 8; i++) {
     await delay(500);
-    await sendFTMSSpeed(kmh);
+    const speedOk = await sendFTMSSpeed(kmh);
     await delay(100);
-    await sendFTMSIncline(incline);
+    const inclOk = await sendFTMSIncline(incline);
+    if (!speedOk || !inclOk) failCount++;
+    if (failCount >= 3) break;
   }
-  console.log('startAndSetSpeed done, sent speed', kmh, '8 times over 4s');
+  if (failCount >= 3 && isRunnerActive()) {
+    enterEmergency('Snelheids-/incline-commando herhaaldelijk mislukt!\nLoopband reageerde niet.');
+    return false;
+  }
+  speedMismatchCount = 0;
+  // P1: Start telemetry freshness clock — if no data arrives within STALE_TELEMETRY_MS, triggers emergency
+  lastTelemetryTime = Date.now();
+  return true;
+}
+
+/* =============================================
+   EMERGENCY MODE
+   ============================================= */
+let emergencyAlarmInterval = null;
+let emergencyStopInterval = null;
+let inEmergency = false; // P1: stacking guard
+let speedMismatchCount = 0;
+const MISMATCH_THRESHOLD = 5;
+const STALE_TELEMETRY_MS = 8000; // emergency after 8s without telemetry
+
+function enterEmergency(message) {
+  // P1: Prevent stacking
+  if (inEmergency) return;
+  inEmergency = true;
+
+  // Stop workout timer immediately
+  if (runTimer) clearInterval(runTimer);
+  runTimer = null;
+  runPaused = true;
+
+  // Show overlay
+  const overlay = document.getElementById('emergencyOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('emergencyMsg').textContent = message;
+  document.getElementById('emergencyDismissBtn').disabled = true;
+  document.getElementById('emergencyDismissBtn').textContent = 'Wacht...';
+
+  // Best-effort stop — spam stop commands while connected
+  if (isBleConnected()) {
+    let stopAttempts = 0;
+    emergencyStopInterval = setInterval(async () => {
+      stopAttempts++;
+      await sendFTMSSpeed(0);
+      await bleWriteRaw([0x08, 0x01]);
+      if (stopAttempts >= 10) {
+        clearInterval(emergencyStopInterval);
+        emergencyStopInterval = null;
+      }
+    }, 500);
+  }
+
+  // Sound alarm
+  emergencyAlarmInterval = setInterval(() => {
+    playBeep(); setTimeout(playBeep, 150);
+  }, 600);
+  setTimeout(() => {
+    if (emergencyAlarmInterval) { clearInterval(emergencyAlarmInterval); emergencyAlarmInterval = null; }
+  }, 10000);
+
+  // Enable dismiss after 3 seconds
+  setTimeout(() => {
+    const btn = document.getElementById('emergencyDismissBtn');
+    if (btn) { btn.disabled = false; btn.textContent = 'Ik heb de loopband fysiek gestopt'; }
+  }, 3000);
+}
+
+function dismissEmergency() {
+  if (actualSpeed > 0.5) {
+    if (!confirm(`De loopband rapporteert nog ${actualSpeed.toFixed(1)} km/h.\nWeet je zeker dat de band stilstaat?`)) {
+      return;
+    }
+  }
+  document.getElementById('emergencyOverlay').style.display = 'none';
+  if (emergencyAlarmInterval) { clearInterval(emergencyAlarmInterval); emergencyAlarmInterval = null; }
+  if (emergencyStopInterval) { clearInterval(emergencyStopInterval); emergencyStopInterval = null; }
+  inEmergency = false;
+  speedMismatchCount = 0;
+  releaseWakeLock();
+  exitFullscreen();
+  showView('viewHome');
 }
 
 function onTreadmillData(event) {
   const dv = event.target.value;
   if (dv.byteLength < 4) return;
+  lastTelemetryTime = Date.now(); // P0: track freshness
   const flags = dv.getUint16(0, true);
   let offset = 2;
 
@@ -1503,21 +1782,121 @@ document.addEventListener('visibilitychange', () => {
 });
 
 /* =============================================
-   FULLSCREEN
+   FULLSCREEN + ORIENTATION
    ============================================= */
-function enterFullscreen() {
-  const el = document.documentElement;
+let orientationLocked = false;
+
+async function enterFullscreen() {
+  // Must await fullscreen before orientation lock is allowed
   try {
-    if (el.requestFullscreen) el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+    const el = document.documentElement;
+    if (el.requestFullscreen) await el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
   } catch (e) { console.warn('Fullscreen failed:', e); }
+
+  // Try to allow free rotation even when system lock is on
+  try {
+    await screen.orientation.lock('any');
+    orientationLocked = true;
+    console.log('Orientation unlocked via API');
+  } catch (e) {
+    console.warn('Orientation API failed, using accelerometer fallback:', e.message);
+    orientationLocked = false;
+    enableOrientationFallback();
+  }
 }
 
 function exitFullscreen() {
+  disableOrientationFallback();
+  if (orientationLocked) {
+    try { screen.orientation.unlock(); } catch (e) {}
+    orientationLocked = false;
+  }
   try {
     if (document.exitFullscreen) document.exitFullscreen();
     else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
   } catch (e) {}
+}
+
+/* --- Fallback: manual rotation via accelerometer (requires HTTPS) --- */
+let orientationFallbackActive = false;
+let currentRotation = 'portrait';
+
+function enableOrientationFallback() {
+  if (orientationFallbackActive) return;
+  orientationFallbackActive = true;
+
+  // iOS requires explicit permission
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(state => {
+      if (state === 'granted') {
+        window.addEventListener('deviceorientation', onDeviceOrientation);
+        console.log('DeviceOrientation fallback active (iOS permission granted)');
+      } else {
+        console.warn('DeviceOrientation permission denied');
+      }
+    }).catch(e => console.warn('DeviceOrientation permission error:', e));
+  } else if ('DeviceOrientationEvent' in window) {
+    window.addEventListener('deviceorientation', onDeviceOrientation);
+    console.log('DeviceOrientation fallback active');
+  } else {
+    console.warn('DeviceOrientation not available — rotation fallback disabled');
+  }
+}
+
+function disableOrientationFallback() {
+  if (!orientationFallbackActive) return;
+  orientationFallbackActive = false;
+  window.removeEventListener('deviceorientation', onDeviceOrientation);
+  removeManualRotation();
+}
+
+function onDeviceOrientation(event) {
+  const gamma = event.gamma;
+  if (gamma === null) return;
+
+  let newRotation = 'portrait';
+  if (gamma > 50) newRotation = 'landscape-right';
+  else if (gamma < -50) newRotation = 'landscape-left';
+
+  if (newRotation === currentRotation) return;
+  currentRotation = newRotation;
+
+  if (newRotation === 'portrait') {
+    removeManualRotation();
+  } else {
+    applyManualRotation(newRotation);
+  }
+}
+
+function applyManualRotation(direction) {
+  const runner = document.getElementById('runnerLayout');
+  if (!runner) return;
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const deg = direction === 'landscape-right' ? 90 : -90;
+  const tx = direction === 'landscape-right' ? vh : 0;
+  const ty = direction === 'landscape-right' ? 0 : vw;
+  runner.style.transform = `rotate(${deg}deg)`;
+  runner.style.transformOrigin = 'top left';
+  runner.style.width = vh + 'px';
+  runner.style.height = vw + 'px';
+  runner.style.position = 'fixed';
+  runner.style.top = ty + 'px';
+  runner.style.left = tx + 'px';
+}
+
+function removeManualRotation() {
+  const runner = document.getElementById('runnerLayout');
+  if (!runner) return;
+  runner.style.transform = '';
+  runner.style.transformOrigin = '';
+  runner.style.width = '';
+  runner.style.height = '';
+  runner.style.position = '';
+  runner.style.top = '';
+  runner.style.left = '';
 }
 
 /* =============================================
