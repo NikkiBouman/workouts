@@ -30,6 +30,24 @@
   --r-sm: 10px;
 }
 
+[data-theme="dark"] {
+  --bg: #080c14;
+  --s1: #0f1724;
+  --s2: #162032;
+  --s3: #1e2d45;
+  --border: #243352;
+  --text: #e8edf5;
+  --muted: #5a6b85;
+  --cyan: #22d3ee;
+  --cyan-dim: #083344;
+  --green: #34d399;
+  --green-dim: #052e16;
+  --red: #ef4444;
+  --amber: #f59e0b;
+  --amber-dim: #451a03;
+  --purple: #a78bfa;
+}
+
 * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 html { height:100%; }
 body { background:var(--bg); color:var(--text); font-family:var(--ui); min-height:100%; overflow-x:hidden; }
@@ -311,8 +329,14 @@ input:focus { border-color:var(--cyan); }
 <div class="conn">
   <div class="conn-dot" id="dot"></div>
   <span class="conn-label" id="connLabel">Niet verbonden</span>
-  <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Verbind</button>
+  <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Loopband</button>
   <button class="btn btn-ghost btn-sm hidden" id="btnDisc" onclick="bleDisconnect()">Verbreek</button>
+</div>
+<div class="conn">
+  <div class="conn-dot" id="hrDot"></div>
+  <span class="conn-label" id="hrLabel">Geen HR monitor</span>
+  <button class="btn btn-sm" id="btnHrConn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
+  <button class="btn btn-ghost btn-sm hidden" id="btnHrDisc" onclick="hrDisconnect()">Verbreek</button>
 </div>
 
 <!-- =========================================
@@ -320,6 +344,9 @@ input:focus { border-color:var(--cyan); }
      ========================================= -->
 <div class="view active" id="viewHome">
   <div class="logo">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:-1rem;">
+      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
+    </div>
     <div class="logo-title">Treadmill<span>Ctrl</span></div>
     <div class="logo-sub">FTMS Workout Controller</div>
   </div>
@@ -416,6 +443,12 @@ input:focus { border-color:var(--cyan); }
             </div>
           </div>
           <span id="runSegTimer" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--cyan);">0:00</span>
+        </div>
+        <!-- Heart rate (shown when connected) -->
+        <div id="runHrDisplay" style="display:none;margin-top:0.35rem;">
+          <span style="color:#e74c3c;font-size:1rem;">❤</span>
+          <span id="runHrValue" style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:#e74c3c;">--</span>
+          <span style="font-size:0.65rem;color:var(--muted);">bpm</span>
         </div>
         <div style="height:5px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;">
           <div id="runSegProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
@@ -868,6 +901,7 @@ function openPreview(id) {
   const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
   const plotW = cW - padL - padR, plotH = cH - padT - padB;
   const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+  const cc = chartColors();
 
   let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
 
@@ -875,8 +909,8 @@ function openPreview(id) {
   for (let i = 0; i <= ySteps; i++) {
     const val = (yMax / ySteps) * i;
     const y = padT + plotH - (val / yMax) * plotH;
-    svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="#d1d9e6" stroke-width="0.5"/>`;
-    svg += `<text x="${padL - 4}" y="${y + 3}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+    svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
   }
 
   let xOffset = 0;
@@ -896,16 +930,16 @@ function openPreview(id) {
   for (let i = 0; i <= xLabelCount; i++) {
     const sec = Math.round((totalSec / xLabelCount) * i);
     const x = padL + (sec / totalSec) * plotW;
-    svg += `<text x="${x}" y="${cH - 4}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+    svg += `<text x="${x}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
   }
 
-  svg += `<text x="${padL}" y="${padT - 1}" fill="#6b7a90" font-size="6" font-family="var(--mono)">km/h</text>`;
+  svg += `<text x="${padL}" y="${padT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
 
   if (maxIncline > 0) {
     const lgX = padL + plotW - 60;
     for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
-    svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="#6b7a90" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
-    svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="#6b7a90" font-size="5" font-family="var(--mono)">15%</text>`;
+    svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
+    svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)">15%</text>`;
   }
 
   svg += '</svg>';
@@ -965,6 +999,10 @@ async function startRunner() {
   runTotalDuration = runSteps.reduce((s, st) => s + st.duration, 0);
   runPaused = false;
   runCalcDistance = 0;
+
+  // Fullscreen + keep screen on
+  enterFullscreen();
+  acquireWakeLock();
 
   showView('viewRunner');
   renderRunChart();
@@ -1048,6 +1086,8 @@ async function togglePause() {
 async function stopRunner() {
   if (runTimer) clearInterval(runTimer);
   runTimer = null;
+  releaseWakeLock();
+  exitFullscreen();
   await sendFTMSStop();
   showView('viewHome');
 }
@@ -1074,9 +1114,19 @@ function formatPhase() {
 const CH_W = 380, CH_H = 140, CH_PL = 32, CH_PR = 8, CH_PT = 8, CH_PB = 22;
 const CH_PLOTW = CH_W - CH_PL - CH_PR, CH_PLOTH = CH_H - CH_PT - CH_PB;
 
+function chartColors() {
+  const s = getComputedStyle(document.body);
+  return {
+    grid: s.getPropertyValue('--border').trim(),
+    label: s.getPropertyValue('--muted').trim(),
+    dim: s.getPropertyValue('--bg').trim(),
+  };
+}
+
 function renderRunChart() {
   const maxSpeed = Math.max(...runSteps.map(s => s.speed));
   const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+  const cc = chartColors();
 
   let svg = `<svg viewBox="0 0 ${CH_W} ${CH_H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;" id="runSvg">`;
 
@@ -1085,8 +1135,8 @@ function renderRunChart() {
   for (let i = 0; i <= ySteps; i++) {
     const val = (yMax / ySteps) * i;
     const y = CH_PT + CH_PLOTH - (val / yMax) * CH_PLOTH;
-    svg += `<line x1="${CH_PL}" y1="${y}" x2="${CH_PL + CH_PLOTW}" y2="${y}" stroke="#d1d9e6" stroke-width="0.5"/>`;
-    svg += `<text x="${CH_PL - 4}" y="${y + 3}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+    svg += `<line x1="${CH_PL}" y1="${y}" x2="${CH_PL + CH_PLOTW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${CH_PL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
   }
 
   // Segment bars
@@ -1104,7 +1154,7 @@ function renderRunChart() {
   });
 
   // Dimming overlay for completed area
-  svg += `<rect id="runDimRect" x="${CH_PL}" y="${CH_PT}" width="0" height="${CH_PLOTH}" fill="rgba(244,245,247,0.6)"/>`;
+  svg += `<rect id="runDimRect" x="${CH_PL}" y="${CH_PT}" width="0" height="${CH_PLOTH}" fill="${cc.dim}" opacity="0.6"/>`;
 
   // Position line
   svg += `<line id="runPosLine" x1="${CH_PL}" y1="${CH_PT}" x2="${CH_PL}" y2="${CH_PT + CH_PLOTH}" stroke="#dc2626" stroke-width="2"/>`;
@@ -1114,10 +1164,10 @@ function renderRunChart() {
   for (let i = 0; i <= xLabelCount; i++) {
     const sec = Math.round((runTotalDuration / xLabelCount) * i);
     const x = CH_PL + (sec / runTotalDuration) * CH_PLOTW;
-    svg += `<text x="${x}" y="${CH_H - 4}" fill="#6b7a90" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+    svg += `<text x="${x}" y="${CH_H - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
   }
 
-  svg += `<text x="${CH_PL}" y="${CH_PT - 1}" fill="#6b7a90" font-size="6" font-family="var(--mono)">km/h</text>`;
+  svg += `<text x="${CH_PL}" y="${CH_PT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
   svg += '</svg>';
   document.getElementById('runChartSvg').innerHTML = svg;
 }
@@ -1339,6 +1389,66 @@ function onTreadmillData(event) {
 }
 
 /* =============================================
+   BLE — Heart Rate Monitor (Garmin etc.)
+   ============================================= */
+const HR_SERVICE = 0x180D;
+const HR_MEASUREMENT = 0x2A37;
+
+let hrDevice = null, hrServer = null;
+let currentHR = 0;
+
+async function hrConnect() {
+  if (!navigator.bluetooth) { alert('Web Bluetooth niet beschikbaar!'); return; }
+  try {
+    hrDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [HR_SERVICE] }]
+    });
+    hrDevice.addEventListener('gattserverdisconnected', () => updateHrUI(false));
+    hrServer = await hrDevice.gatt.connect();
+    const svc = await hrServer.getPrimaryService(HR_SERVICE);
+    const hrChar = await svc.getCharacteristic(HR_MEASUREMENT);
+    hrChar.addEventListener('characteristicvaluechanged', onHeartRate);
+    await hrChar.startNotifications();
+    updateHrUI(true);
+  } catch (err) {
+    console.error('HR connect error:', err);
+    alert('HR verbinding mislukt: ' + err.message);
+  }
+}
+
+function hrDisconnect() {
+  if (hrDevice?.gatt?.connected) hrDevice.gatt.disconnect();
+  updateHrUI(false);
+}
+
+function updateHrUI(connected) {
+  document.getElementById('hrDot').className = connected ? 'conn-dot on' : 'conn-dot';
+  document.getElementById('hrLabel').textContent = connected ? `❤ ${hrDevice?.name || 'HR Monitor'}` : 'Geen HR monitor';
+  document.getElementById('btnHrConn').classList.toggle('hidden', connected);
+  document.getElementById('btnHrDisc').classList.toggle('hidden', !connected);
+
+  const hrDisplay = document.getElementById('runHrDisplay');
+  if (hrDisplay) hrDisplay.style.display = connected ? '' : 'none';
+}
+
+function onHeartRate(event) {
+  const dv = event.target.value;
+  const flags = dv.getUint8(0);
+  // Bit 0: 0 = HR is UINT8, 1 = HR is UINT16
+  if (flags & 0x01) {
+    currentHR = dv.getUint16(1, true);
+  } else {
+    currentHR = dv.getUint8(1);
+  }
+  // Update runner display
+  const el = document.getElementById('runHrValue');
+  if (el) el.textContent = currentHR;
+
+  // Update connection bar
+  document.getElementById('hrLabel').textContent = `❤ ${currentHR} bpm`;
+}
+
+/* =============================================
    UTILS
    ============================================= */
 function fmtTime(sec) {
@@ -1355,8 +1465,66 @@ function esc(str) {
 }
 
 /* =============================================
+   THEME
+   ============================================= */
+function applyTheme(theme) {
+  document.body.setAttribute('data-theme', theme);
+  localStorage.setItem('treadmill_theme', theme);
+  document.getElementById('themeToggle').textContent = theme === 'dark' ? '☀️' : '🌙';
+}
+
+function toggleTheme() {
+  const current = document.body.getAttribute('data-theme') || 'light';
+  applyTheme(current === 'dark' ? 'light' : 'dark');
+}
+
+/* =============================================
+   WAKE LOCK (keep screen on)
+   ============================================= */
+let wakeLock = null;
+
+async function acquireWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', () => { wakeLock = null; });
+      console.log('Wake lock acquired');
+    }
+  } catch (e) { console.warn('Wake lock failed:', e); }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release(); wakeLock = null; }
+}
+
+// Re-acquire on visibility change (when user switches back to tab)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && runTimer) acquireWakeLock();
+});
+
+/* =============================================
+   FULLSCREEN
+   ============================================= */
+function enterFullscreen() {
+  const el = document.documentElement;
+  try {
+    if (el.requestFullscreen) el.requestFullscreen();
+    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+  } catch (e) { console.warn('Fullscreen failed:', e); }
+}
+
+function exitFullscreen() {
+  try {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  } catch (e) {}
+}
+
+/* =============================================
    INIT
    ============================================= */
+// Apply saved theme
+applyTheme(localStorage.getItem('treadmill_theme') || 'light');
 renderWorkoutList();
 </script>
 </body>
