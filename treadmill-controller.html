@@ -281,31 +281,34 @@ input:focus { border-color:var(--cyan); }
 }
 #viewRunner.active { display:block !important; }
 #runnerLayout {
-  display:flex; flex-direction:column; height:100dvh;
-  padding:0.5rem; gap:0.4rem; box-sizing:border-box;
+  display:flex; flex-direction:column; height:100dvh; height:100vh;
+  padding:0.5rem; gap:0.35rem; box-sizing:border-box; overflow:hidden;
 }
-#runnerChart { flex:0 0 auto; }
+#runnerChart { flex:0 0 auto; max-height:30vh; }
 #runnerControls {
-  flex:1; display:flex; flex-direction:column; gap:0.4rem; min-height:0;
+  flex:1; display:flex; flex-direction:column; gap:0.35rem; min-height:0; overflow:hidden;
 }
+#runnerCardioMode { flex:1; display:flex; flex-direction:column; gap:0.35rem; min-height:0; overflow-y:auto; }
+#runnerStrengthMode { min-height:0; overflow-y:auto; }
 .run-card {
   background:var(--s1); border:1px solid var(--border);
-  border-radius:var(--r); padding:0.65rem 0.75rem;
+  border-radius:var(--r); padding:0.65rem 0.75rem; flex-shrink:0;
 }
 
 /* Landscape: side by side */
 @media (orientation:landscape) {
   #runnerLayout { flex-direction:row; gap:0.5rem; }
-  #runnerChart { flex:1 1 50%; min-width:0; }
-  #runnerControls { flex:1 1 50%; min-width:0; }
+  #runnerChart { flex:1 1 45%; min-width:0; max-height:none; }
+  #runnerControls { flex:1 1 55%; min-width:0; }
   #runChartWrap { height:100%; display:flex; align-items:center; }
   #runChartSvg { width:100%; }
 }
 
-/* Small portrait phones: tighter spacing */
+/* Small portrait phones: even tighter */
 @media (orientation:portrait) and (max-height:700px) {
-  #runnerLayout { gap:0.25rem; padding:0.35rem; }
-  .run-card { padding:0.5rem 0.6rem; }
+  #runnerLayout { gap:0.2rem; padding:0.25rem; }
+  .run-card { padding:0.4rem 0.5rem; }
+  #runnerChart { max-height:25vh; }
 }
 
 .unit-btn {
@@ -363,7 +366,7 @@ input:focus { border-color:var(--cyan); }
 h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem; }
 
 .str-img {
-  width:100%; max-height:40vh; object-fit:cover; background:var(--s2); display:none;
+  width:100%; max-height:35vh; object-fit:cover; background:var(--s2);
 }
 @media (min-width:600px) {
   .str-img { width:240px; height:240px; border-radius:var(--r); margin:0 auto; }
@@ -402,19 +405,26 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
   </div>
 
   <div style="margin-top:1.25rem;">
-    <div class="row row-between" style="margin-bottom:0.75rem;">
-      <h3 style="margin:0;">Mijn Workouts</h3>
-      <button class="btn btn-cyan btn-sm" onclick="openWorkoutEditor(null)">+ Nieuw</button>
+    <div class="row row-between" style="margin-bottom:0.75rem;cursor:pointer;" onclick="toggleSection('workouts')">
+      <h3 style="margin:0;"><span id="workoutsArrow">▾</span> Mijn Workouts</h3>
+      <button class="btn btn-cyan btn-sm" onclick="event.stopPropagation();openWorkoutEditor(null)">+ Nieuw</button>
     </div>
     <div id="workoutList"></div>
   </div>
 
   <div style="margin-top:1.25rem;">
-    <div class="row row-between" style="margin-bottom:0.75rem;">
-      <h3 style="margin:0;">Mijn Oefeningen</h3>
-      <button class="btn btn-ghost btn-sm" onclick="openExerciseEditor(null)">+ Nieuw</button>
+    <div class="row row-between" style="margin-bottom:0.75rem;cursor:pointer;" onclick="toggleSection('exercises')">
+      <h3 style="margin:0;"><span id="exercisesArrow">▾</span> Mijn Oefeningen</h3>
+      <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openExerciseEditor(null)">+ Nieuw</button>
     </div>
     <div id="exerciseList"></div>
+  </div>
+
+  <div style="margin-top:1.25rem;">
+    <div style="margin-bottom:0.75rem;cursor:pointer;" onclick="toggleSection('history')">
+      <h3><span id="historyArrow">▸</span> Geschiedenis</h3>
+    </div>
+    <div id="historyList" style="display:none;"></div>
   </div>
 </div>
 
@@ -680,7 +690,26 @@ function migrateWorkout(w) {
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'viewHome') { renderWorkoutList(); renderExerciseList(); }
+  if (id === 'viewHome') { renderWorkoutList(); renderExerciseList(); renderHistory(); applySectionStates(); }
+}
+
+const SECTIONS = { workouts: 'workoutList', exercises: 'exerciseList', history: 'historyList' };
+
+function toggleSection(key) {
+  const collapsed = JSON.parse(localStorage.getItem('treadmill_collapsed') || '{}');
+  collapsed[key] = !collapsed[key];
+  localStorage.setItem('treadmill_collapsed', JSON.stringify(collapsed));
+  applySectionStates();
+}
+
+function applySectionStates() {
+  const collapsed = JSON.parse(localStorage.getItem('treadmill_collapsed') || '{"history":true}');
+  for (const [key, listId] of Object.entries(SECTIONS)) {
+    const list = document.getElementById(listId);
+    const arrow = document.getElementById(key + 'Arrow');
+    if (list) list.style.display = collapsed[key] ? 'none' : '';
+    if (arrow) arrow.textContent = collapsed[key] ? '▸' : '▾';
+  }
 }
 
 /* =============================================
@@ -742,6 +771,35 @@ function deleteExercise(id) {
   if (!confirm('Oefening verwijderen?')) return;
   saveExercises(loadExercises().filter(e => e.id !== id));
   renderExerciseList();
+}
+
+function renderHistory() {
+  const history = loadHistory();
+  const el = document.getElementById('historyList');
+  if (!history.length) {
+    el.innerHTML = `<div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:0.85rem;">Nog geen workouts voltooid.</div>`;
+    return;
+  }
+  el.innerHTML = history.slice(0, 20).map(h => {
+    const d = new Date(h.date);
+    const dateStr = d.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+    const timeStr = d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' });
+    const exList = h.exercises.map(e => {
+      let detail = e.exerciseName;
+      if (e.type === 'strength') {
+        detail += ` ${e.sets || 0}×${e.reps || e.duration + 's'}`;
+        if (e.weight > 0) detail += ` ${e.weight}kg`;
+      }
+      return detail;
+    }).join(' · ');
+    return `<div style="padding:0.5rem 0.65rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;font-size:0.85rem;">${esc(h.workoutName)}</span>
+        <span style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);">${dateStr} ${timeStr}</span>
+      </div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem;font-family:var(--mono);">${fmtTime(h.totalSeconds)} · ${esc(exList)}</div>
+    </div>`;
+  }).join('');
 }
 
 /* =============================================
@@ -1612,19 +1670,35 @@ async function finishWorkout() {
   if (runTimer) { clearInterval(runTimer); runTimer = null; }
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
-  showRunnerMode('strength');
+  if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
+  currentCardioUsesBle = false;
+
+  // Log to history
+  const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
+  if (raw) logWorkoutCompletion(migrateWorkout(raw));
+
   const totalElapsed = Math.round((Date.now() - runStartTime) / 1000);
+
+  // Show completion screen
+  showRunnerMode('strength');
   document.getElementById('strExImg').style.display = 'none';
-  document.getElementById('strExName').textContent = '✅ Workout voltooid!';
+  document.getElementById('strExName').textContent = '';
   document.getElementById('strSetLabel').textContent = '';
-  document.getElementById('strDetail').textContent = `Totale tijd: ${fmtTime(totalElapsed)}`;
+  document.getElementById('strDetail').textContent = '';
   document.getElementById('strWeight').textContent = '';
   document.getElementById('strTimerArea').style.display = 'none';
-  document.getElementById('strTimerBtn').style.display = 'none';
-  // Hide the "Volgende set" button area
-  document.getElementById('strActions').style.display = 'none';
   document.getElementById('runBtnPause').disabled = true;
-  if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
+  document.getElementById('runBtnSkip').classList.add('hidden');
+
+  const actions = document.getElementById('strActions');
+  actions.style.display = '';
+  actions.innerHTML = `
+    <div style="text-align:center;">
+      <div style="width:120px;height:120px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:3rem;color:#fff;">✓</div>
+      <div style="font-size:1.3rem;font-weight:800;margin-bottom:0.25rem;">Workout voltooid!</div>
+      <div style="font-family:var(--mono);font-size:1rem;color:var(--muted);">${fmtTime(totalElapsed)}</div>
+    </div>`;
+
   playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
 }
 
@@ -2381,9 +2455,7 @@ async function enterFullscreen() {
     const el = document.documentElement;
     if (el.requestFullscreen) await el.requestFullscreen();
     else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
-  } catch (e) { console.warn('Fullscreen failed:', e); }
-
-  // In fullscreen, proper API can override system rotation lock
+  } catch (e) {}
   try {
     await screen.orientation.lock('any');
     orientationLocked = true;
@@ -2401,86 +2473,45 @@ function exitFullscreen() {
   } catch (e) {}
 }
 
-/* --- Accelerometer rotation for entire app (always active) --- */
-let orientationFallbackActive = false;
-let currentRotation = 'portrait';
+/* =============================================
+   WORKOUT HISTORY
+   ============================================= */
+const HISTORY_KEY = 'treadmill_history';
 
-function enableOrientationFallback() {
-  if (orientationFallbackActive) return;
-
-  // iOS needs permission from a user gesture — hook into first tap
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    document.addEventListener('click', function iosOrientationPermission() {
-      document.removeEventListener('click', iosOrientationPermission);
-      DeviceOrientationEvent.requestPermission().then(state => {
-        if (state === 'granted') {
-          orientationFallbackActive = true;
-          window.addEventListener('deviceorientation', onDeviceOrientation);
-        }
-      }).catch(() => {});
-    }, { once: true });
-    return;
-  }
-
-  if ('DeviceOrientationEvent' in window) {
-    orientationFallbackActive = true;
-    window.addEventListener('deviceorientation', onDeviceOrientation);
-  }
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
 }
 
-function onDeviceOrientation(event) {
-  const gamma = event.gamma;
-  if (gamma === null) return;
-
-  let newRotation = 'portrait';
-  if (gamma > 50) newRotation = 'landscape-right';
-  else if (gamma < -50) newRotation = 'landscape-left';
-
-  if (newRotation === currentRotation) return;
-  currentRotation = newRotation;
-
-  if (newRotation === 'portrait') {
-    removeManualRotation();
-  } else {
-    applyManualRotation(newRotation);
-  }
-}
-
-function applyManualRotation(direction) {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const deg = direction === 'landscape-right' ? 90 : -90;
-  const tx = direction === 'landscape-right' ? vh : 0;
-  const ty = direction === 'landscape-right' ? 0 : vw;
-  document.body.style.transform = `rotate(${deg}deg)`;
-  document.body.style.transformOrigin = 'top left';
-  document.body.style.width = vh + 'px';
-  document.body.style.height = vw + 'px';
-  document.body.style.position = 'fixed';
-  document.body.style.top = ty + 'px';
-  document.body.style.left = tx + 'px';
-  document.body.style.overflow = 'auto';
-}
-
-function removeManualRotation() {
-  document.body.style.transform = '';
-  document.body.style.transformOrigin = '';
-  document.body.style.width = '';
-  document.body.style.height = '';
-  document.body.style.position = '';
-  document.body.style.top = '';
-  document.body.style.left = '';
-  document.body.style.overflow = '';
+function logWorkoutCompletion(workout) {
+  const history = loadHistory();
+  const entries = (workout.entries || []).map(e => {
+    const ex = getExercise(e.exerciseId);
+    return {
+      exerciseName: ex?.name || '?',
+      exerciseId: e.exerciseId,
+      type: ex?.type || '?',
+      sets: e.sets, reps: e.reps, duration: e.duration, weight: e.weight,
+    };
+  });
+  history.unshift({
+    date: new Date().toISOString(),
+    workoutName: workout.name,
+    totalSeconds: Math.round((Date.now() - runStartTime) / 1000),
+    exercises: entries,
+  });
+  // Keep last 100
+  if (history.length > 100) history.length = 100;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
 /* =============================================
    INIT
    ============================================= */
 applyTheme(localStorage.getItem('treadmill_theme') || 'light');
-enableOrientationFallback();
 renderWorkoutList();
 renderExerciseList();
+renderHistory();
+applySectionStates();
 </script>
 </body>
 </html>
