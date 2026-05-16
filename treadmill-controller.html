@@ -320,23 +320,73 @@ input:focus { border-color:var(--cyan); }
   color:var(--cyan); cursor:pointer; background:none; border:none;
   padding:0; text-decoration:underline; text-underline-offset:2px;
 }
+
+.exercise-img {
+  width:48px; height:48px; border-radius:var(--r-sm); object-fit:cover;
+  background:var(--s2); flex-shrink:0; display:block;
+}
+.exercise-img-lg {
+  width:80px; height:80px; border-radius:var(--r); object-fit:cover;
+  background:var(--s2); border:1px solid var(--border);
+}
+.exercise-card {
+  display:flex; align-items:center; gap:0.75rem;
+  padding:0.65rem 0.75rem; background:var(--s1); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:0.4rem; cursor:pointer;
+  transition:border-color 0.15s;
+}
+.exercise-card:hover { border-color:var(--cyan); }
+.exercise-card-info { flex:1; min-width:0; }
+.exercise-card-name { font-weight:700; font-size:0.85rem; }
+.exercise-card-meta { font-size:0.65rem; color:var(--muted); margin-top:0.1rem; }
+
+.entry-block {
+  background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
+  margin-bottom:0.5rem; overflow:hidden;
+}
+.entry-header {
+  display:flex; align-items:center; gap:0.65rem; padding:0.65rem 0.75rem;
+  border-bottom:1px solid var(--border); background:var(--s2);
+}
+.entry-body { padding:0.75rem; }
+
+.toggle-group {
+  display:flex; gap:0.2rem; background:var(--s2); border-radius:8px; padding:3px; width:fit-content;
+}
+.toggle-opt {
+  font-family:var(--ui); font-size:0.7rem; font-weight:600;
+  padding:0.3rem 0.65rem; border-radius:6px; background:transparent;
+  color:var(--muted); border:none; cursor:pointer;
+}
+.toggle-opt.active { background:var(--cyan); color:var(--bg); }
+
+h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem; }
+
+.str-img {
+  width:100%; max-height:40vh; object-fit:cover; background:var(--s2); display:none;
+}
+@media (min-width:600px) {
+  .str-img { width:240px; height:240px; border-radius:var(--r); margin:0 auto; }
+}
 </style>
 </head>
 <body>
 <div class="app">
 
-<!-- Connection bar (global) -->
-<div class="conn">
-  <div class="conn-dot" id="dot"></div>
-  <span class="conn-label" id="connLabel">Niet verbonden</span>
-  <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Loopband</button>
-  <button class="btn btn-ghost btn-sm hidden" id="btnDisc" onclick="bleDisconnect()">Verbreek</button>
-</div>
-<div class="conn">
-  <div class="conn-dot" id="hrDot"></div>
-  <span class="conn-label" id="hrLabel">Geen HR monitor</span>
-  <button class="btn btn-sm" id="btnHrConn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
-  <button class="btn btn-ghost btn-sm hidden" id="btnHrDisc" onclick="hrDisconnect()">Verbreek</button>
+<!-- Connection bars (global) -->
+<div id="globalConn">
+  <div class="conn">
+    <div class="conn-dot" id="dot"></div>
+    <span class="conn-label" id="connLabel">Niet verbonden</span>
+    <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Loopband</button>
+    <button class="btn btn-ghost btn-sm hidden" id="btnDisc" onclick="bleDisconnect()">Verbreek</button>
+  </div>
+  <div class="conn">
+    <div class="conn-dot" id="hrDot"></div>
+    <span class="conn-label" id="hrLabel">Geen HR monitor</span>
+    <button class="btn btn-sm" id="btnHrConn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
+    <button class="btn btn-ghost btn-sm hidden" id="btnHrDisc" onclick="hrDisconnect()">Verbreek</button>
+  </div>
 </div>
 
 <!-- =========================================
@@ -347,21 +397,101 @@ input:focus { border-color:var(--cyan); }
     <div style="display:flex;justify-content:flex-end;margin-bottom:-1rem;">
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
     </div>
-    <div class="logo-title">Treadmill<span>Ctrl</span></div>
-    <div class="logo-sub">FTMS Workout Controller</div>
+    <div class="logo-title">Workout<span>Ctrl</span></div>
+    <div class="logo-sub">Treadmill &amp; Strength Workout Controller</div>
   </div>
 
   <div style="margin-top:1.25rem;">
     <div class="row row-between" style="margin-bottom:0.75rem;">
       <h3 style="margin:0;">Mijn Workouts</h3>
-      <button class="btn btn-cyan btn-sm" onclick="openEditor(null)">+ Nieuw</button>
+      <button class="btn btn-cyan btn-sm" onclick="openWorkoutEditor(null)">+ Nieuw</button>
     </div>
     <div id="workoutList"></div>
+  </div>
+
+  <div style="margin-top:1.25rem;">
+    <div class="row row-between" style="margin-bottom:0.75rem;">
+      <h3 style="margin:0;">Mijn Oefeningen</h3>
+      <button class="btn btn-ghost btn-sm" onclick="openExerciseEditor(null)">+ Nieuw</button>
+    </div>
+    <div id="exerciseList"></div>
   </div>
 </div>
 
 <!-- =========================================
-     VIEW: EDITOR
+     VIEW: EXERCISE EDITOR
+     ========================================= -->
+<div class="view" id="viewExerciseEdit">
+  <div class="editor-header">
+    <button class="btn-icon" onclick="showView('viewHome')" style="font-size:1rem;">←</button>
+    <span style="font-weight:700;font-size:1rem;">Oefening</span>
+  </div>
+
+  <div class="card" style="margin-bottom:0.75rem;">
+    <div class="card-body" style="display:flex;gap:1rem;align-items:start;">
+      <div>
+        <img id="exImgPreview" class="exercise-img-lg" src="" alt="" onerror="this.style.display='none'">
+        <div id="exImgPlaceholder" class="exercise-img-lg" style="display:flex;align-items:center;justify-content:center;font-size:2rem;color:var(--muted);">?</div>
+      </div>
+      <div style="flex:1;">
+        <div class="field" style="margin-bottom:0.5rem;">
+          <label class="field-label">Naam</label>
+          <input id="exName" placeholder="bv. Nordic Hamstring Curl">
+        </div>
+        <div class="field">
+          <label class="field-label">Afbeelding URL</label>
+          <input id="exImageUrl" placeholder="https://..." oninput="previewExImage()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:0.75rem;">
+    <div class="card-body">
+      <h4>Type</h4>
+      <div class="toggle-group" style="margin-bottom:0.75rem;">
+        <button class="toggle-opt active" id="exTypeCardio" onclick="setExType('cardio')">🏃 Cardio</button>
+        <button class="toggle-opt" id="exTypeStrength" onclick="setExType('strength')">💪 Kracht</button>
+      </div>
+
+      <div id="exCardioOptions" style="display:none;">
+        <h4>Gebruikt loopband?</h4>
+        <div class="toggle-group" style="margin-bottom:0.75rem;">
+          <button class="toggle-opt" id="exBleNo" onclick="setExBle(false)">Nee</button>
+          <button class="toggle-opt active" id="exBleYes" onclick="setExBle(true)">Ja (BLE)</button>
+        </div>
+      </div>
+
+      <div id="exStrengthOptions" style="display:none;">
+        <h4>Per zijde?</h4>
+        <div class="toggle-group" style="margin-bottom:0.75rem;">
+          <button class="toggle-opt active" id="exSideNo" onclick="setExPerSide(false)">Nee</button>
+          <button class="toggle-opt" id="exSideYes" onclick="setExPerSide(true)">Ja (bv. per been)</button>
+        </div>
+
+        <h4>Meten in</h4>
+        <div class="toggle-group" style="margin-bottom:0.75rem;">
+          <button class="toggle-opt active" id="exMeasureReps" onclick="setExMeasure('reps')">Herhalingen</button>
+          <button class="toggle-opt" id="exMeasureDur" onclick="setExMeasure('duration')">Seconden</button>
+        </div>
+
+        <h4>Gewicht mogelijk?</h4>
+        <div class="toggle-group">
+          <button class="toggle-opt active" id="exWeightNo" onclick="setExWeighted(false)">Nee</button>
+          <button class="toggle-opt" id="exWeightYes" onclick="setExWeighted(true)">Ja (kg)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:0.5rem;">
+    <button class="btn btn-ghost" onclick="showView('viewHome')" style="flex:1;">Annuleer</button>
+    <button class="btn btn-cyan" onclick="saveExercise()" style="flex:1;">Opslaan</button>
+  </div>
+</div>
+
+<!-- =========================================
+     VIEW: WORKOUT EDITOR
      ========================================= -->
 <div class="view" id="viewEditor">
   <div class="editor-header">
@@ -369,30 +499,17 @@ input:focus { border-color:var(--cyan); }
     <input id="editorName" placeholder="Workout naam..." value="Nieuwe Workout">
   </div>
 
-  <!-- Eenheden -->
-  <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.35rem;">Eenheden</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr 36px;gap:0.5rem;margin-bottom:0.5rem;align-items:center;">
-    <div style="display:flex;gap:0.2rem;background:var(--s2);border-radius:8px;padding:3px;width:fit-content;">
-      <button class="unit-btn" id="uDurKm" onclick="setDurUnit('km')">km</button>
-      <button class="unit-btn" id="uDurMin" onclick="setDurUnit('min')">min</button>
-      <button class="unit-btn active" id="uDurSec" onclick="setDurUnit('sec')">sec</button>
-    </div>
-    <div style="display:flex;gap:0.2rem;background:var(--s2);border-radius:8px;padding:3px;width:fit-content;">
-      <button class="unit-btn active" id="unitKmh" onclick="setSpeedUnit('kmh')">km/h</button>
-      <button class="unit-btn" id="unitPace" onclick="setSpeedUnit('pace')">min/km</button>
-    </div>
-    <div></div>
-    <div></div>
+  <div id="entryList"></div>
+
+  <button class="btn btn-ghost btn-sm btn-full" onclick="showExercisePicker()" style="margin-bottom:1rem;">+ Oefening toevoegen</button>
+
+  <!-- Exercise picker (hidden by default) -->
+  <div id="exercisePicker" style="display:none;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem;margin-bottom:1rem;">
+    <h4>Kies een oefening</h4>
+    <div id="exercisePickerList"></div>
   </div>
 
-  <div class="block-list" id="blockList"></div>
-
-  <div class="add-buttons">
-    <button class="btn btn-ghost btn-sm" onclick="addSegment()" style="flex:1;">+ Segment</button>
-    <button class="btn btn-ghost btn-sm" onclick="addSuperset()" style="flex:1;">+ Superset</button>
-  </div>
-
-  <div class="editor-actions">
+  <div style="display:flex;gap:0.5rem;">
     <button class="btn btn-ghost" onclick="showView('viewHome')" style="flex:1;">Annuleer</button>
     <button class="btn btn-cyan" onclick="saveWorkout()" style="flex:1;">Opslaan</button>
   </div>
@@ -436,69 +553,82 @@ input:focus { border-color:var(--cyan); }
 
     <!-- Right / Bottom: Controls -->
     <div id="runnerControls">
-      <!-- Current segment -->
-      <div class="run-card" id="runCurrentCard">
-        <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.35rem;" id="runSegLabel">Nu</div>
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
-          <div style="display:flex;align-items:baseline;gap:0.6rem;">
-            <div>
-              <span id="runSpeed" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--green);">0.0</span>
-              <span style="font-size:0.65rem;color:var(--muted);">km/h</span>
-              <div id="runActualSpeed" style="display:none;font-family:var(--mono);font-size:0.6rem;"></div>
+
+      <!-- === CARDIO MODE === -->
+      <div id="runnerCardioMode">
+        <div class="run-card" id="runCurrentCard">
+          <div style="font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.35rem;" id="runSegLabel">Nu</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
+            <div style="display:flex;align-items:baseline;gap:0.6rem;">
+              <div>
+                <span id="runSpeed" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--green);">0.0</span>
+                <span style="font-size:0.65rem;color:var(--muted);">km/h</span>
+                <div id="runActualSpeed" style="display:none;font-family:var(--mono);font-size:0.6rem;"></div>
+              </div>
+              <div>
+                <span id="runPace" style="font-family:var(--mono);font-size:1.1rem;font-weight:600;">--:--</span>
+                <span style="font-size:0.65rem;color:var(--muted);">min/km</span>
+              </div>
             </div>
-            <div>
-              <span id="runPace" style="font-family:var(--mono);font-size:1.1rem;font-weight:600;">--:--</span>
-              <span style="font-size:0.65rem;color:var(--muted);">min/km</span>
+            <span id="runSegTimer" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--cyan);">0:00</span>
+          </div>
+          <div id="runHrDisplay" style="display:none;margin-top:0.35rem;">
+            <span style="color:#e74c3c;font-size:1rem;">❤</span>
+            <span id="runHrValue" style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:#e74c3c;">--</span>
+            <span style="font-size:0.65rem;color:var(--muted);">bpm</span>
+          </div>
+          <div style="height:5px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;">
+            <div id="runSegProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
+          </div>
+        </div>
+        <div class="run-card" id="runNextBox" style="opacity:0.4;">
+          <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.3rem;">Hierna</div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
+            <div style="display:flex;align-items:baseline;gap:0.6rem;">
+              <div><span id="runNextSpeed" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--green);">--</span><span style="font-size:0.6rem;color:var(--muted);">km/h</span></div>
+              <div><span id="runNextPace" style="font-family:var(--mono);font-size:1rem;font-weight:600;">--:--</span><span style="font-size:0.6rem;color:var(--muted);">min/km</span></div>
+            </div>
+            <span id="runNextTime" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--muted);">--:--</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;">
+          <div class="run-card" style="text-align:center;padding:0.5rem;">
+            <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Afstand</div>
+            <span id="runTotalDist" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0.00</span><span style="font-size:0.6rem;color:var(--muted);"> km</span>
+          </div>
+          <div class="run-card" style="text-align:center;padding:0.5rem;">
+            <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Tijd</div>
+            <span id="runTotalTime" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0:00</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- === STRENGTH MODE === -->
+      <div id="runnerStrengthMode" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+        <img id="strExImg" class="str-img" src="" onerror="this.style.display='none'">
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:1rem;gap:0.35rem;">
+          <div id="strExName" style="font-size:1rem;font-weight:600;color:var(--muted);"></div>
+          <div id="strSetLabel" style="font-family:var(--mono);font-size:2rem;font-weight:800;line-height:1.2;"></div>
+          <div id="strDetail" style="font-family:var(--mono);font-size:1rem;color:var(--muted);"></div>
+          <div id="strWeight" style="font-family:var(--mono);font-size:0.9rem;color:var(--muted);"></div>
+          <div id="strTimerArea" style="display:none;margin:0.5rem 0;">
+            <div id="strTimerDisplay" style="font-family:var(--mono);font-size:4rem;font-weight:800;color:var(--cyan);">0:00</div>
+            <div style="height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;width:240px;margin-left:auto;margin-right:auto;">
+              <div id="strTimerProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
             </div>
           </div>
-          <span id="runSegTimer" style="font-family:var(--mono);font-size:2rem;font-weight:800;color:var(--cyan);">0:00</span>
-        </div>
-        <!-- Heart rate (shown when connected) -->
-        <div id="runHrDisplay" style="display:none;margin-top:0.35rem;">
-          <span style="color:#e74c3c;font-size:1rem;">❤</span>
-          <span id="runHrValue" style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:#e74c3c;">--</span>
-          <span style="font-size:0.65rem;color:var(--muted);">bpm</span>
-        </div>
-        <div style="height:5px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;">
-          <div id="runSegProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
-        </div>
-      </div>
-
-      <!-- Next segment -->
-      <div class="run-card" id="runNextBox" style="opacity:0.4;">
-        <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;font-weight:700;margin-bottom:0.3rem;">Hierna</div>
-        <div style="display:flex;align-items:baseline;justify-content:space-between;gap:0.5rem;">
-          <div style="display:flex;align-items:baseline;gap:0.6rem;">
-            <div>
-              <span id="runNextSpeed" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--green);">--</span>
-              <span style="font-size:0.6rem;color:var(--muted);">km/h</span>
-            </div>
-            <div>
-              <span id="runNextPace" style="font-family:var(--mono);font-size:1rem;font-weight:600;">--:--</span>
-              <span style="font-size:0.6rem;color:var(--muted);">min/km</span>
-            </div>
+          <div id="strActions" style="margin-top:1rem;">
+            <button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>
+            <button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>
           </div>
-          <span id="runNextTime" style="font-family:var(--mono);font-size:1.6rem;font-weight:800;color:var(--muted);">--:--</span>
         </div>
       </div>
 
-      <!-- Totals -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem;" id="runTotalsRow">
-        <div class="run-card" style="text-align:center;padding:0.5rem;">
-          <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Afstand</div>
-          <span id="runTotalDist" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0.00</span>
-          <span style="font-size:0.6rem;color:var(--muted);"> km</span>
-        </div>
-        <div class="run-card" style="text-align:center;padding:0.5rem;">
-          <div style="font-size:0.55rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;font-weight:700;">Tijd</div>
-          <span id="runTotalTime" style="font-family:var(--mono);font-size:1.2rem;font-weight:700;">0:00</span>
-        </div>
-      </div>
-
-      <!-- Buttons pushed to bottom -->
+      <!-- Buttons (always visible) -->
       <div id="runBtnRow" class="runner-actions" style="margin-top:auto;">
-        <button class="btn btn-ghost" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
-        <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled>⏹ Stop</button>
+        <button class="btn btn-ghost hidden" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
+        <button class="btn btn-ghost hidden" id="runBtnSkip" onclick="strSkipExercise()">⏭ Skip</button>
+        <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled style="flex:1;">⏹ Stop</button>
       </div>
     </div>
   </div>
@@ -510,14 +640,38 @@ input:focus { border-color:var(--cyan); }
 /* =============================================
    DATA MODEL & STORAGE
    ============================================= */
-const STORAGE_KEY = 'treadmill_workouts';
+const WORKOUTS_KEY = 'treadmill_workouts';
+const EXERCISES_KEY = 'treadmill_exercises';
 
 function loadWorkouts() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  try { return JSON.parse(localStorage.getItem(WORKOUTS_KEY)) || []; }
   catch { return []; }
 }
-function saveWorkouts(list) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+function saveWorkoutsData(list) { localStorage.setItem(WORKOUTS_KEY, JSON.stringify(list)); }
+
+function loadExercises() {
+  try {
+    const list = JSON.parse(localStorage.getItem(EXERCISES_KEY));
+    if (list && list.length) return list;
+  } catch {}
+  // Default exercises
+  const defaults = [
+    { id:'ex_hardlopen', name:'Hardlopen', imageUrl:'', type:'cardio', perSide:false, measureBy:null, weighted:false, bleConnectable:true },
+  ];
+  localStorage.setItem(EXERCISES_KEY, JSON.stringify(defaults));
+  return defaults;
+}
+function saveExercises(list) { localStorage.setItem(EXERCISES_KEY, JSON.stringify(list)); }
+
+function getExercise(id) { return loadExercises().find(e => e.id === id); }
+
+// Migrate old workout format (blocks) → new format (entries)
+function migrateWorkout(w) {
+  if (w.entries) return w;
+  if (w.blocks) {
+    return { ...w, entries: [{ id:'e_'+Date.now(), exerciseId:'ex_hardlopen', blocks: w.blocks }], blocks: undefined };
+  }
+  return { ...w, entries: [] };
 }
 
 /* =============================================
@@ -526,29 +680,29 @@ function saveWorkouts(list) {
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id === 'viewHome') renderWorkoutList();
+  if (id === 'viewHome') { renderWorkoutList(); renderExerciseList(); }
 }
 
 /* =============================================
-   HOME: WORKOUT LIST
+   HOME
    ============================================= */
 function renderWorkoutList() {
-  const list = loadWorkouts();
+  const list = loadWorkouts().map(migrateWorkout);
   const el = document.getElementById('workoutList');
   if (!list.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🏃‍♀️</div><div class="empty-state-text">Nog geen workouts.<br>Maak je eerste workout aan!</div></div>`;
+    el.innerHTML = `<div class="empty-state"><div class="empty-state-icon">💪</div><div class="empty-state-text">Nog geen workouts.</div></div>`;
     return;
   }
-  el.innerHTML = list.map((w, i) => {
-    const steps = flattenWorkout(w);
-    const totalSec = steps.reduce((s, st) => s + st.duration, 0);
+  el.innerHTML = list.map(w => {
+    const exNames = w.entries.map(e => getExercise(e.exerciseId)?.name || '?').join(', ');
+    const entryCount = w.entries.length;
     return `<div class="workout-item" onclick="openPreview('${w.id}')">
       <div class="workout-item-info">
         <div class="workout-item-name">${esc(w.name)}</div>
-        <div class="workout-item-meta">${steps.length} stappen · ${fmtTime(totalSec)}</div>
+        <div class="workout-item-meta">${entryCount} oefening${entryCount !== 1 ? 'en' : ''} · ${esc(exNames)}</div>
       </div>
       <div class="workout-item-actions">
-        <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" onclick="event.stopPropagation();openEditor('${w.id}')">✏️</button>
+        <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" onclick="event.stopPropagation();openWorkoutEditor('${w.id}')">✏️</button>
         <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" onclick="event.stopPropagation();deleteWorkout('${w.id}')">🗑</button>
       </div>
       <div class="workout-item-play">▶</div>
@@ -556,17 +710,124 @@ function renderWorkoutList() {
   }).join('');
 }
 
+function renderExerciseList() {
+  const list = loadExercises();
+  const el = document.getElementById('exerciseList');
+  el.innerHTML = list.map(ex => {
+    const meta = ex.type === 'cardio' ? '🏃 Cardio' : `💪 Kracht${ex.perSide ? ' · per zijde' : ''}${ex.weighted ? ' · gewicht' : ''}`;
+    const imgHtml = ex.imageUrl
+      ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+      : '';
+    return `<div class="exercise-card" onclick="openExerciseEditor('${ex.id}')">
+      <div style="position:relative;">
+        ${imgHtml}
+        <div class="exercise-img" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>
+      </div>
+      <div class="exercise-card-info">
+        <div class="exercise-card-name">${esc(ex.name)}</div>
+        <div class="exercise-card-meta">${meta}</div>
+      </div>
+      ${ex.id !== 'ex_hardlopen' ? `<button class="btn-icon" style="width:32px;height:32px;font-size:0.75rem;" onclick="event.stopPropagation();deleteExercise('${ex.id}')">🗑</button>` : ''}
+    </div>`;
+  }).join('');
+}
+
 function deleteWorkout(id) {
   if (!confirm('Workout verwijderen?')) return;
-  const list = loadWorkouts().filter(w => w.id !== id);
-  saveWorkouts(list);
+  saveWorkoutsData(loadWorkouts().filter(w => w.id !== id));
   renderWorkoutList();
 }
 
+function deleteExercise(id) {
+  if (!confirm('Oefening verwijderen?')) return;
+  saveExercises(loadExercises().filter(e => e.id !== id));
+  renderExerciseList();
+}
+
 /* =============================================
-   EDITOR
+   EXERCISE EDITOR
    ============================================= */
-let editorBlocks = [];
+let editingExId = null;
+let exState = { type:'cardio', perSide:false, measureBy:'reps', weighted:false, bleConnectable:true };
+
+function openExerciseEditor(id) {
+  editingExId = id;
+  if (id) {
+    const ex = getExercise(id);
+    if (!ex) return;
+    document.getElementById('exName').value = ex.name;
+    document.getElementById('exImageUrl').value = ex.imageUrl || '';
+    exState = { type: ex.type, perSide: ex.perSide, measureBy: ex.measureBy || 'reps', weighted: ex.weighted, bleConnectable: ex.bleConnectable || false };
+  } else {
+    document.getElementById('exName').value = '';
+    document.getElementById('exImageUrl').value = '';
+    exState = { type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false };
+  }
+  syncExUI();
+  previewExImage();
+  showView('viewExerciseEdit');
+}
+
+function setExType(t) { exState.type = t; syncExUI(); }
+function setExPerSide(v) { exState.perSide = v; syncExUI(); }
+function setExMeasure(v) { exState.measureBy = v; syncExUI(); }
+function setExWeighted(v) { exState.weighted = v; syncExUI(); }
+function setExBle(v) { exState.bleConnectable = v; syncExUI(); }
+
+function syncExUI() {
+  document.getElementById('exTypeCardio').classList.toggle('active', exState.type === 'cardio');
+  document.getElementById('exTypeStrength').classList.toggle('active', exState.type === 'strength');
+  document.getElementById('exCardioOptions').style.display = exState.type === 'cardio' ? '' : 'none';
+  document.getElementById('exStrengthOptions').style.display = exState.type === 'strength' ? '' : 'none';
+  document.getElementById('exBleNo').classList.toggle('active', !exState.bleConnectable);
+  document.getElementById('exBleYes').classList.toggle('active', exState.bleConnectable);
+  document.getElementById('exSideNo').classList.toggle('active', !exState.perSide);
+  document.getElementById('exSideYes').classList.toggle('active', exState.perSide);
+  document.getElementById('exMeasureReps').classList.toggle('active', exState.measureBy === 'reps');
+  document.getElementById('exMeasureDur').classList.toggle('active', exState.measureBy === 'duration');
+  document.getElementById('exWeightNo').classList.toggle('active', !exState.weighted);
+  document.getElementById('exWeightYes').classList.toggle('active', exState.weighted);
+}
+
+function previewExImage() {
+  const url = document.getElementById('exImageUrl').value.trim();
+  const img = document.getElementById('exImgPreview');
+  const placeholder = document.getElementById('exImgPlaceholder');
+  if (url) {
+    img.src = url; img.style.display = ''; placeholder.style.display = 'none';
+  } else {
+    img.style.display = 'none'; placeholder.style.display = 'flex';
+  }
+}
+
+function saveExercise() {
+  const name = document.getElementById('exName').value.trim();
+  if (!name) { alert('Geef de oefening een naam'); return; }
+  const list = loadExercises();
+  const ex = {
+    id: editingExId || 'ex_' + Date.now(),
+    name,
+    imageUrl: document.getElementById('exImageUrl').value.trim(),
+    type: exState.type,
+    perSide: exState.type === 'strength' ? exState.perSide : false,
+    measureBy: exState.type === 'strength' ? exState.measureBy : null,
+    weighted: exState.type === 'strength' ? exState.weighted : false,
+    bleConnectable: exState.type === 'cardio' ? exState.bleConnectable : false,
+  };
+  if (editingExId) {
+    const idx = list.findIndex(e => e.id === editingExId);
+    if (idx >= 0) list[idx] = { ...list[idx], ...ex };
+  } else {
+    list.push(ex);
+  }
+  saveExercises(list);
+  showView('viewHome');
+}
+
+/* =============================================
+   WORKOUT EDITOR
+   ============================================= */
+let editorEntries = [];
 let editingId = null;
 let speedUnit = localStorage.getItem('treadmill_speed_unit') || 'kmh';
 let durUnit = localStorage.getItem('treadmill_dur_unit') || 'sec';
@@ -574,26 +835,14 @@ let durUnit = localStorage.getItem('treadmill_dur_unit') || 'sec';
 function setSpeedUnit(unit) {
   speedUnit = unit;
   localStorage.setItem('treadmill_speed_unit', unit);
-  syncUnitUI();
-  renderBlocks();
+  renderEntries();
 }
-
 function setDurUnit(unit) {
   durUnit = unit;
   localStorage.setItem('treadmill_dur_unit', unit);
-  syncUnitUI();
-  renderBlocks();
+  renderEntries();
 }
 
-function syncUnitUI() {
-  document.getElementById('unitKmh').classList.toggle('active', speedUnit === 'kmh');
-  document.getElementById('unitPace').classList.toggle('active', speedUnit === 'pace');
-  document.getElementById('uDurSec').classList.toggle('active', durUnit === 'sec');
-  document.getElementById('uDurMin').classList.toggle('active', durUnit === 'min');
-  document.getElementById('uDurKm').classList.toggle('active', durUnit === 'km');
-}
-
-// Speed ↔ Pace conversion
 function kmhToPace(kmh) {
   if (kmh <= 0) return '--:--';
   const pace = 60 / kmh;
@@ -601,7 +850,6 @@ function kmhToPace(kmh) {
   const s = Math.round((pace - m) * 60);
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
-
 function paceToKmh(paceStr) {
   if (paceStr.includes(':')) {
     const [m, s] = paceStr.split(':').map(Number);
@@ -612,175 +860,233 @@ function paceToKmh(paceStr) {
   return p > 0 ? 60 / p : 0;
 }
 
-function openEditor(id) {
+function openWorkoutEditor(id) {
   editingId = id;
   if (id) {
-    const w = loadWorkouts().find(w => w.id === id);
+    const w = migrateWorkout(loadWorkouts().find(w => w.id === id));
     if (!w) return;
     document.getElementById('editorName').value = w.name;
-    editorBlocks = JSON.parse(JSON.stringify(w.blocks));
+    editorEntries = JSON.parse(JSON.stringify(w.entries));
   } else {
     document.getElementById('editorName').value = 'Nieuwe Workout';
-    editorBlocks = [
-      { type:'segment', mode:'time', duration:300, distance:0, speed:5, incline:0 }
-    ];
+    editorEntries = [];
   }
-  // Ensure all segments have mode + distance
-  function ensure(seg) {
-    if (!seg.mode) seg.mode = 'time';
-    if (!seg.distance) seg.distance = seg.speed > 0 ? seg.duration / 3600 * seg.speed : 0;
-  }
-  editorBlocks.forEach(b => {
-    if (b.type === 'segment') ensure(b);
-    else if (b.segments) b.segments.forEach(ensure);
-  });
-  syncUnitUI();
-  renderBlocks();
+  document.getElementById('exercisePicker').style.display = 'none';
+  renderEntries();
   showView('viewEditor');
 }
 
-function newSegDefaults() {
-  if (durUnit === 'km') return { mode:'distance', duration:0, distance:1.0, speed:5, incline:0 };
-  return { mode:'time', duration: durUnit === 'min' ? 60 : 60, distance:0, speed:5, incline:0 };
+function showExercisePicker() {
+  const picker = document.getElementById('exercisePicker');
+  picker.style.display = '';
+  const list = loadExercises();
+  document.getElementById('exercisePickerList').innerHTML = list.map(ex => {
+    const imgHtml = ex.imageUrl
+      ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none'">`
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+    return `<div class="exercise-card" onclick="addEntry('${ex.id}')">
+      ${imgHtml}
+      <div class="exercise-card-info">
+        <div class="exercise-card-name">${esc(ex.name)}</div>
+        <div class="exercise-card-meta">${ex.type === 'cardio' ? '🏃 Cardio' : '💪 Kracht'}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function addSegment() {
-  editorBlocks.push({ type:'segment', ...newSegDefaults() });
-  renderBlocks();
+function addEntry(exerciseId) {
+  const ex = getExercise(exerciseId);
+  if (!ex) return;
+  const entry = { id: 'e_' + Date.now(), exerciseId };
+  if (ex.type === 'cardio') {
+    entry.blocks = [{ type:'segment', mode:'time', duration:300, distance:0, speed:5, incline:0 }];
+  } else {
+    entry.sets = 3;
+    entry.reps = ex.measureBy === 'reps' ? 10 : null;
+    entry.duration = ex.measureBy === 'duration' ? 30 : null;
+    entry.weight = ex.weighted ? 0 : null;
+  }
+  editorEntries.push(entry);
+  document.getElementById('exercisePicker').style.display = 'none';
+  renderEntries();
 }
 
-function addSuperset() {
-  editorBlocks.push({
-    type:'superset', repeats:3,
-    segments:[ { ...newSegDefaults(), speed:8 }, { ...newSegDefaults() } ]
-  });
-  renderBlocks();
+function removeEntry(idx) {
+  editorEntries.splice(idx, 1);
+  renderEntries();
 }
 
-function addSegmentToSuperset(blockIdx) {
-  editorBlocks[blockIdx].segments.push({ ...newSegDefaults() });
-  renderBlocks();
+function moveEntry(idx, direction) {
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= editorEntries.length) return;
+  const item = editorEntries.splice(idx, 1)[0];
+  editorEntries.splice(newIdx, 0, item);
+  renderEntries();
 }
 
-function removeBlock(idx) {
-  editorBlocks.splice(idx, 1);
-  renderBlocks();
+function renderEntries() {
+  const el = document.getElementById('entryList');
+  el.innerHTML = editorEntries.map((entry, ei) => {
+    const ex = getExercise(entry.exerciseId);
+    if (!ex) return '';
+    const imgHtml = ex.imageUrl
+      ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="">`
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+
+    let bodyHtml;
+    if (ex.type === 'cardio') {
+      bodyHtml = renderCardioEditor(entry, ei);
+    } else {
+      bodyHtml = renderStrengthEditor(entry, ei, ex);
+    }
+
+    return `<div class="entry-block">
+      <div class="entry-header">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <button class="remove-btn" style="width:24px;height:24px;font-size:0.6rem;" onclick="moveEntry(${ei},-1)" ${ei === 0 ? 'disabled' : ''}>▲</button>
+          <button class="remove-btn" style="width:24px;height:24px;font-size:0.6rem;" onclick="moveEntry(${ei},1)" ${ei === editorEntries.length - 1 ? 'disabled' : ''}>▼</button>
+        </div>
+        ${imgHtml}
+        <span style="font-weight:700;flex:1;">${esc(ex.name)}</span>
+        <button class="remove-btn" onclick="removeEntry(${ei})">×</button>
+      </div>
+      <div class="entry-body">${bodyHtml}</div>
+    </div>`;
+  }).join('');
 }
 
-function removeSegFromSuperset(blockIdx, segIdx) {
-  editorBlocks[blockIdx].segments.splice(segIdx, 1);
-  if (editorBlocks[blockIdx].segments.length === 0) editorBlocks.splice(blockIdx, 1);
-  renderBlocks();
+function renderStrengthEditor(entry, ei, ex) {
+  const prefix = `editorEntries[${ei}]`;
+  let html = `<div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;">`;
+
+  html += `<div class="field">
+    <label class="field-label">Sets</label>
+    <input type="number" min="1" max="20" value="${entry.sets || 3}"
+      onchange="${prefix}.sets=+this.value" style="width:50px;">
+  </div>`;
+
+  if (ex.measureBy === 'reps') {
+    html += `<div class="field">
+      <label class="field-label">Herhalingen</label>
+      <input type="number" min="1" max="100" value="${entry.reps || 10}"
+        onchange="${prefix}.reps=+this.value" style="width:55px;">
+    </div>`;
+  } else {
+    html += `<div class="field">
+      <label class="field-label">Seconden</label>
+      <input type="number" min="1" max="300" step="5" value="${entry.duration || 30}"
+        onchange="${prefix}.duration=+this.value" style="width:55px;">
+    </div>`;
+  }
+
+  if (ex.weighted) {
+    html += `<div class="field">
+      <label class="field-label">Gewicht (kg)</label>
+      <input type="number" min="0" max="200" step="0.5" value="${entry.weight || 0}"
+        onchange="${prefix}.weight=+this.value" style="width:60px;">
+    </div>`;
+  }
+
+  if (ex.perSide) {
+    html += `<div style="font-size:0.7rem;color:var(--amber);font-weight:600;">↔ Per zijde</div>`;
+  }
+
+  html += `</div>`;
+  return html;
 }
 
-function renderBlocks() {
-  const el = document.getElementById('blockList');
-  el.innerHTML = editorBlocks.map((block, bi) => {
+function renderCardioEditor(entry, ei) {
+  const blocks = entry.blocks || [];
+  const prefix = `editorEntries[${ei}].blocks`;
+
+  // Unit toggles for cardio
+  let html = `<div style="display:flex;gap:0.5rem;margin-bottom:0.5rem;align-items:center;">
+    <div class="toggle-group" style="font-size:0;">
+      <button class="toggle-opt ${durUnit==='km'?'active':''}" onclick="setDurUnit('km')">km</button>
+      <button class="toggle-opt ${durUnit==='min'?'active':''}" onclick="setDurUnit('min')">min</button>
+      <button class="toggle-opt ${durUnit==='sec'?'active':''}" onclick="setDurUnit('sec')">sec</button>
+    </div>
+    <div class="toggle-group" style="font-size:0;">
+      <button class="toggle-opt ${speedUnit==='kmh'?'active':''}" onclick="setSpeedUnit('kmh')">km/h</button>
+      <button class="toggle-opt ${speedUnit==='pace'?'active':''}" onclick="setSpeedUnit('pace')">min/km</button>
+    </div>
+  </div>`;
+
+  html += blocks.map((block, bi) => {
     if (block.type === 'segment') {
-      return `<div class="block">${segmentRowHTML(block, bi, null)}</div>`;
+      return `<div style="border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.35rem;">${cardioSegRow(block, `${prefix}[${bi}]`, `removeCardioBlock(${ei},${bi})`)}</div>`;
     } else {
       const segs = block.segments.map((s, si) =>
-        segmentRowHTML(s, bi, si)
+        cardioSegRow(s, `${prefix}[${bi}].segments[${si}]`, `removeCardioSeg(${ei},${bi},${si})`, true)
       ).join('');
-      return `<div class="block">
-        <div class="superset-header">
-          <span class="tag tag-repeat">⟳ Superset</span>
-          <div class="field" style="width:60px;">
-            <label class="field-label">Herhaal</label>
-            <input type="number" min="1" max="50" value="${block.repeats}"
-              onchange="editorBlocks[${bi}].repeats=+this.value">
-          </div>
-          <span style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);">×</span>
-          <button class="remove-btn" onclick="removeBlock(${bi})">×</button>
+      return `<div style="border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.35rem;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:0.5rem;padding:0.4rem 0.5rem;background:var(--s2);border-bottom:1px solid var(--border);">
+          <span class="tag tag-repeat" style="font-size:0.6rem;">⟳ Superset</span>
+          <input type="number" min="1" max="50" value="${block.repeats}" onchange="${prefix}[${bi}].repeats=+this.value" style="width:40px;font-size:0.7rem;padding:0.2rem;">
+          <span style="font-size:0.65rem;color:var(--muted);">×</span>
+          <button class="remove-btn" style="margin-left:auto;" onclick="removeCardioBlock(${ei},${bi})">×</button>
         </div>
         ${segs}
-        <div style="padding:0.4rem 0.75rem;">
-          <button class="btn btn-ghost btn-sm" onclick="addSegmentToSuperset(${bi})" style="width:100%;font-size:0.7rem;">+ Segment</button>
+        <div style="padding:0.3rem 0.5rem;">
+          <button class="btn btn-ghost btn-sm" onclick="addCardioSegToSuperset(${ei},${bi})" style="width:100%;font-size:0.6rem;">+ Segment</button>
         </div>
       </div>`;
     }
   }).join('');
+
+  html += `<div style="display:flex;gap:0.35rem;">
+    <button class="btn btn-ghost btn-sm" onclick="addCardioSegment(${ei})" style="flex:1;font-size:0.65rem;">+ Segment</button>
+    <button class="btn btn-ghost btn-sm" onclick="addCardioSuperset(${ei})" style="flex:1;font-size:0.65rem;">+ Superset</button>
+  </div>`;
+  return html;
 }
 
-function segmentRowHTML(seg, blockIdx, segIdx) {
-  const isSuper = segIdx !== null;
-  const prefix = isSuper
-    ? `editorBlocks[${blockIdx}].segments[${segIdx}]`
-    : `editorBlocks[${blockIdx}]`;
-  const removeAction = isSuper
-    ? `removeSegFromSuperset(${blockIdx},${segIdx})`
-    : `removeBlock(${blockIdx})`;
-
-  // First column based on durUnit
+function cardioSegRow(seg, prefix, removeAction, inSuperset) {
   let col1;
   if (durUnit === 'km') {
-    const distVal = seg.distance || (seg.speed > 0 ? +(seg.duration / 3600 * seg.speed).toFixed(2) : 1);
-    col1 = `<div class="field">
-      <label class="field-label">Afstand</label>
-      <div class="field-row">
-        <input type="number" min="0.1" max="50" step="0.1" value="${distVal}"
-          onchange="${prefix}.distance=+this.value;${prefix}.mode='distance'" style="width:55px;">
-        <span class="field-unit">km</span>
-      </div>
-    </div>`;
+    const v = seg.distance || (seg.speed > 0 ? +(seg.duration / 3600 * seg.speed).toFixed(2) : 1);
+    col1 = `<input type="number" min="0.1" max="50" step="0.1" value="${v}" onchange="${prefix}.distance=+this.value;${prefix}.mode='distance'" style="width:48px;font-size:0.75rem;"> <small>km</small>`;
   } else if (durUnit === 'min') {
-    const minVal = +(seg.duration / 60).toFixed(1);
-    col1 = `<div class="field">
-      <label class="field-label">Duur</label>
-      <div class="field-row">
-        <input type="number" min="0.1" max="120" step="0.5" value="${minVal}"
-          onchange="${prefix}.duration=Math.round(this.value*60);${prefix}.mode='time'" style="width:55px;">
-        <span class="field-unit">min</span>
-      </div>
-    </div>`;
+    col1 = `<input type="number" min="0.1" max="120" step="0.5" value="${+(seg.duration/60).toFixed(1)}" onchange="${prefix}.duration=Math.round(this.value*60);${prefix}.mode='time'" style="width:48px;font-size:0.75rem;"> <small>min</small>`;
   } else {
-    col1 = `<div class="field">
-      <label class="field-label">Duur</label>
-      <div class="field-row">
-        <input type="number" min="5" max="7200" step="5" value="${seg.duration}"
-          onchange="${prefix}.duration=+this.value;${prefix}.mode='time'" style="width:60px;">
-        <span class="field-unit">sec</span>
-      </div>
-    </div>`;
+    col1 = `<input type="number" min="5" max="7200" step="5" value="${seg.duration}" onchange="${prefix}.duration=+this.value;${prefix}.mode='time'" style="width:52px;font-size:0.75rem;"> <small>sec</small>`;
   }
-
-  // Second column: speed
   let col2;
   if (speedUnit === 'pace') {
-    const paceVal = kmhToPace(seg.speed);
-    col2 = `<div class="field">
-      <label class="field-label">Tempo</label>
-      <div class="field-row">
-        <input type="text" value="${paceVal}" style="width:55px;text-align:center;"
-          onchange="const v=paceToKmh(this.value);if(v>0)${prefix}.speed=Math.round(v*10)/10;"
-          placeholder="6:00">
-        <span class="field-unit">min/km</span>
-      </div>
-    </div>`;
+    col2 = `<input type="text" value="${kmhToPace(seg.speed)}" style="width:48px;font-size:0.75rem;text-align:center;" onchange="const v=paceToKmh(this.value);if(v>0)${prefix}.speed=Math.round(v*10)/10;"> <small>min/km</small>`;
   } else {
-    col2 = `<div class="field">
-      <label class="field-label">Snelheid</label>
-      <div class="field-row">
-        <input type="number" min="0.5" max="18" step="0.5" value="${seg.speed}"
-          onchange="${prefix}.speed=+this.value" style="width:55px;">
-        <span class="field-unit">km/h</span>
-      </div>
-    </div>`;
+    col2 = `<input type="number" min="0.5" max="18" step="0.5" value="${seg.speed}" onchange="${prefix}.speed=+this.value" style="width:48px;font-size:0.75rem;"> <small>km/h</small>`;
   }
-
-  return `<div class="segment-row ${isSuper ? 'in-superset' : ''}">
-    ${col1}
-    ${col2}
-    <div class="field">
-      <label class="field-label">Incline</label>
-      <div class="field-row">
-        <input type="number" min="0" max="15" step="0.5" value="${seg.incline}"
-          onchange="${prefix}.incline=+this.value" style="width:45px;">
-        <span class="field-unit">%</span>
-      </div>
-    </div>
-    <button class="remove-btn" onclick="${removeAction}">×</button>
+  const col3 = `<input type="number" min="0" max="15" step="0.5" value="${seg.incline}" onchange="${prefix}.incline=+this.value" style="width:40px;font-size:0.75rem;"> <small>%</small>`;
+  return `<div style="display:flex;gap:0.5rem;padding:0.4rem 0.5rem;align-items:center;${inSuperset ? 'border-left:3px solid var(--purple);' : ''}">
+    <span style="flex:1;">${col1}</span><span style="flex:1;">${col2}</span><span style="flex:1;">${col3}</span>
+    <button class="remove-btn" style="width:28px;height:28px;font-size:0.8rem;" onclick="${removeAction}">×</button>
   </div>`;
+}
+
+function addCardioSegment(ei) {
+  editorEntries[ei].blocks.push({ type:'segment', mode:'time', duration:60, distance:0, speed:5, incline:0 });
+  renderEntries();
+}
+function addCardioSuperset(ei) {
+  editorEntries[ei].blocks.push({ type:'superset', repeats:3, segments:[
+    { mode:'time', duration:30, distance:0, speed:8, incline:0 },
+    { mode:'time', duration:30, distance:0, speed:5, incline:0 }
+  ]});
+  renderEntries();
+}
+function addCardioSegToSuperset(ei, bi) {
+  editorEntries[ei].blocks[bi].segments.push({ mode:'time', duration:30, distance:0, speed:5, incline:0 });
+  renderEntries();
+}
+function removeCardioBlock(ei, bi) {
+  editorEntries[ei].blocks.splice(bi, 1);
+  renderEntries();
+}
+function removeCardioSeg(ei, bi, si) {
+  editorEntries[ei].blocks[bi].segments.splice(si, 1);
+  if (editorEntries[ei].blocks[bi].segments.length === 0) editorEntries[ei].blocks.splice(bi, 1);
+  renderEntries();
 }
 
 function saveWorkout() {
@@ -788,16 +1094,16 @@ function saveWorkout() {
   const list = loadWorkouts();
   if (editingId) {
     const idx = list.findIndex(w => w.id === editingId);
-    if (idx >= 0) { list[idx].name = name; list[idx].blocks = editorBlocks; }
+    if (idx >= 0) { list[idx].name = name; list[idx].entries = editorEntries; delete list[idx].blocks; }
   } else {
-    list.push({ id: 'w_' + Date.now(), name, blocks: editorBlocks });
+    list.push({ id: 'w_' + Date.now(), name, entries: editorEntries });
   }
-  saveWorkouts(list);
+  saveWorkoutsData(list);
   showView('viewHome');
 }
 
 /* =============================================
-   FLATTEN WORKOUT → EXECUTION STEPS
+   FLATTEN WORKOUT → EXECUTION STEPS (cardio)
    ============================================= */
 function getSegDuration(seg) {
   if (seg.mode === 'distance' && seg.distance > 0 && seg.speed > 0) {
@@ -806,9 +1112,20 @@ function getSegDuration(seg) {
   return seg.duration || 60;
 }
 
+function getCardioBlocks(workout) {
+  const w = migrateWorkout(workout);
+  const allBlocks = [];
+  for (const entry of (w.entries || [])) {
+    const ex = getExercise(entry.exerciseId);
+    if (ex?.type === 'cardio' && entry.blocks) allBlocks.push(...entry.blocks);
+  }
+  return allBlocks.length ? allBlocks : (w.blocks || []);
+}
+
 function flattenWorkout(workout) {
+  const blocks = getCardioBlocks(workout);
   const steps = [];
-  workout.blocks.forEach((block, bi) => {
+  blocks.forEach((block, bi) => {
     if (block.type === 'segment') {
       steps.push({
         speed: block.speed, incline: block.incline, duration: getSegDuration(block),
@@ -895,93 +1212,117 @@ function previewTableRow(seg) {
 
 function openPreview(id) {
   previewWorkoutId = id;
-  const w = loadWorkouts().find(w => w.id === id);
-  if (!w) return;
+  const raw = loadWorkouts().find(w => w.id === id);
+  if (!raw) return;
+  const w = migrateWorkout(raw);
   const steps = flattenWorkout(w);
+  const hasCardio = steps.length > 0;
   const totalSec = steps.reduce((s, st) => s + st.duration, 0);
-  const maxSpeed = Math.max(...steps.map(s => s.speed));
-  const maxIncline = Math.max(...steps.map(s => s.incline));
+  const maxSpeed = hasCardio ? Math.max(...steps.map(s => s.speed)) : 0;
+  const maxIncline = hasCardio ? Math.max(...steps.map(s => s.incline)) : 0;
+  const entries = w.entries || [];
+  const strengthCount = entries.filter(e => getExercise(e.exerciseId)?.type === 'strength').length;
 
   document.getElementById('previewName').textContent = w.name;
   document.getElementById('previewStats').innerHTML =
-    `<span>${steps.length} stappen</span><span>${fmtTime(totalSec)}</span><span>max ${speedDisplay(maxSpeed)}</span>`;
+    `<span>${entries.length} oefening${entries.length !== 1 ? 'en' : ''}</span>${hasCardio ? `<span>${fmtTime(totalSec)} cardio</span>` : ''}${strengthCount ? `<span>${strengthCount} kracht</span>` : ''}`;
 
-  // --- SVG Chart ---
-  const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
-  const plotW = cW - padL - padR, plotH = cH - padT - padB;
-  const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
-  const cc = chartColors();
+  // --- SVG Chart (only if cardio) ---
+  const chartEl = document.getElementById('previewChart');
+  if (hasCardio) {
+    const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
+    const plotW = cW - padL - padR, plotH = cH - padT - padB;
+    const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+    const cc = chartColors();
 
-  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
-
-  const ySteps = Math.min(5, yMax);
-  for (let i = 0; i <= ySteps; i++) {
-    const val = (yMax / ySteps) * i;
-    const y = padT + plotH - (val / yMax) * plotH;
-    svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
-    svg += `<text x="${padL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
-  }
-
-  let xOffset = 0;
-  steps.forEach(s => {
-    const x = padL + (xOffset / totalSec) * plotW;
-    const bw = (s.duration / totalSec) * plotW;
-    const h = (s.speed / yMax) * plotH;
-    const y = padT + plotH - h;
-    svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85"/>`;
-    if (bw > 18 && h > 12) {
-      svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
+    let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+    const ySteps = Math.min(5, yMax);
+    for (let i = 0; i <= ySteps; i++) {
+      const val = (yMax / ySteps) * i;
+      const y = padT + plotH - (val / yMax) * plotH;
+      svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+      svg += `<text x="${padL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
     }
-    xOffset += s.duration;
-  });
-
-  const xLabelCount = Math.min(6, Math.ceil(totalSec / 60));
-  for (let i = 0; i <= xLabelCount; i++) {
-    const sec = Math.round((totalSec / xLabelCount) * i);
-    const x = padL + (sec / totalSec) * plotW;
-    svg += `<text x="${x}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+    let xOffset = 0;
+    steps.forEach(s => {
+      const x = padL + (xOffset / totalSec) * plotW;
+      const bw = (s.duration / totalSec) * plotW;
+      const h = (s.speed / yMax) * plotH;
+      const y = padT + plotH - h;
+      svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85"/>`;
+      if (bw > 18 && h > 12) svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
+      xOffset += s.duration;
+    });
+    const xLabelCount = Math.min(6, Math.ceil(totalSec / 60));
+    for (let i = 0; i <= xLabelCount; i++) {
+      const sec = Math.round((totalSec / xLabelCount) * i);
+      const x = padL + (sec / totalSec) * plotW;
+      svg += `<text x="${x}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+    }
+    svg += `<text x="${padL}" y="${padT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
+    if (maxIncline > 0) {
+      const lgX = padL + plotW - 60;
+      for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
+      svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
+      svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)">15%</text>`;
+    }
+    svg += '</svg>';
+    chartEl.innerHTML = svg;
+    chartEl.style.display = '';
+  } else {
+    chartEl.style.display = 'none';
   }
 
-  svg += `<text x="${padL}" y="${padT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
-
-  if (maxIncline > 0) {
-    const lgX = padL + plotW - 60;
-    for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
-    svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
-    svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)">15%</text>`;
-  }
-
-  svg += '</svg>';
-  document.getElementById('previewChart').innerHTML = svg;
-
-  // --- Block-structured table list ---
+  // --- Entry list ---
   const tblStyle = `width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:0.75rem;`;
   const thStyle = `text-align:left;padding:0.3rem 0.5rem;font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;border-bottom:2px solid var(--border);`;
   const tdStyle = `padding:0.35rem 0.5rem;border-bottom:1px solid var(--border);`;
-
   let blocksHtml = '<style>.prev-tbl th{' + thStyle + '}.prev-tbl td{' + tdStyle + '}</style>';
 
-  w.blocks.forEach((block, bi) => {
-    if (block.type === 'segment') {
-      blocksHtml += `<table class="prev-tbl" style="${tblStyle}margin-bottom:0.5rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
-        ${previewTableHead()}
-        ${previewTableRow(block)}
-      </table>`;
+  entries.forEach(entry => {
+    const ex = getExercise(entry.exerciseId);
+    if (!ex) return;
+
+    const imgHtml = ex.imageUrl
+      ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="">`
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+
+    if (ex.type === 'cardio' && entry.blocks) {
+      // Cardio: show exercise header + block table
+      blocksHtml += `<div style="display:flex;align-items:center;gap:0.5rem;margin:0.75rem 0 0.35rem;font-weight:700;">${imgHtml} ${esc(ex.name)}</div>`;
+      (entry.blocks || []).forEach(block => {
+        if (block.type === 'segment') {
+          blocksHtml += `<table class="prev-tbl" style="${tblStyle}margin-bottom:0.5rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
+            ${previewTableHead()}${previewTableRow(block)}</table>`;
+        } else {
+          blocksHtml += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.5rem;overflow:hidden;">
+            <div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.65rem;background:var(--s2);border-bottom:1px solid var(--border);">
+              <span class="tag tag-repeat">⟳ ${block.repeats}× herhalen</span>
+              <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">${fmtTime(block.segments.reduce((t, s) => t + getSegDuration(s), 0) * block.repeats)} totaal</span>
+            </div>
+            <table class="prev-tbl" style="${tblStyle}">${previewTableHead()}${block.segments.map(seg => previewTableRow(seg)).join('')}</table>
+          </div>`;
+        }
+      });
     } else {
-      blocksHtml += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.5rem;overflow:hidden;">`;
-      blocksHtml += `<div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.65rem;background:var(--s2);border-bottom:1px solid var(--border);">
-        <span class="tag tag-repeat">⟳ ${block.repeats}× herhalen</span>
-        <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">${fmtTime(block.segments.reduce((t, s) => t + getSegDuration(s), 0) * block.repeats)} totaal</span>
+      // Strength: show exercise card with details
+      let detail = `${entry.sets || 0} sets`;
+      if (entry.reps) detail += ` × ${entry.reps} reps`;
+      if (entry.duration) detail += ` × ${entry.duration}s`;
+      if (entry.weight > 0) detail += ` · ${entry.weight} kg`;
+      if (ex.perSide) detail += ` · per zijde`;
+
+      blocksHtml += `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.75rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:0.4rem;">
+        ${imgHtml}
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:0.85rem;">${esc(ex.name)}</div>
+          <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);margin-top:0.15rem;">${detail}</div>
+        </div>
       </div>`;
-      blocksHtml += `<table class="prev-tbl" style="${tblStyle}">
-        ${previewTableHead()}
-        ${block.segments.map(seg => previewTableRow(seg)).join('')}
-      </table>`;
-      blocksHtml += `</div>`;
     }
   });
-  document.getElementById('previewBlocks').innerHTML = blocksHtml;
 
+  document.getElementById('previewBlocks').innerHTML = blocksHtml;
   showView('viewPreview');
 }
 
@@ -990,58 +1331,301 @@ function openPreview(id) {
    ============================================= */
 let runSteps = [];
 let runIndex = 0;
-let runSegElapsed = 0;  // seconds into current segment
+let runSegElapsed = 0;
 let runTotalElapsed = 0;
 let runTotalDuration = 0;
 let runTimer = null;
 let runPaused = false;
 let runAudioCtx = null;
-let runCalcDistance = 0; // calculated distance in km
+let runCalcDistance = 0;
+
+// Unified entry runner
+let runEntries = [];
+let runEntryIndex = 0;
+let runMode = 'idle';
+let runStartTime = 0;
+let currentCardioUsesBle = false;
+let confirmWaitInterval = null; // wall-clock start for total elapsed
+
+// Strength state
+let strSetIndex = 0;
+let strSideIndex = 0;
+let strTimerTotal = 0;
+let strTimerElapsed = 0;
+let strTimerActive = false;
+let strTimerInterval = null;
+
+function showRunnerMode(mode) {
+  runMode = mode;
+  document.getElementById('runnerCardioMode').style.display = mode === 'cardio' ? '' : 'none';
+  const strEl = document.getElementById('runnerStrengthMode');
+  strEl.style.display = mode === 'strength' ? 'flex' : 'none';
+  document.getElementById('runnerChart').style.display = mode === 'cardio' ? '' : 'none';
+  document.getElementById('runBtnPause').classList.toggle('hidden', mode !== 'cardio');
+  document.getElementById('runBtnSkip').classList.toggle('hidden', mode !== 'strength');
+}
 
 async function startRunner() {
-  // P0: Block start if not connected
-  if (!isBleConnected()) {
-    alert('Verbind eerst met de loopband!');
+  const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
+  if (!raw) return;
+  const wk = migrateWorkout(raw);
+  runEntries = wk.entries || [];
+  if (!runEntries.length) { alert('Workout is leeg'); return; }
+
+  const needsBle = runEntries.some(e => getExercise(e.exerciseId)?.bleConnectable);
+  if (needsBle && !isBleConnected()) {
+    alert('Deze workout bevat hardlopen — verbind eerst met de loopband!');
     return;
   }
 
-  const w = loadWorkouts().find(w => w.id === previewWorkoutId);
-  if (!w) return;
-  runSteps = flattenWorkout(w);
+  runEntryIndex = 0;
+  runTotalElapsed = 0;
+  runCalcDistance = 0;
+  runPaused = false;
+  runStartTime = Date.now();
 
-  // P1: Validate all steps
+  enterFullscreen();
+  acquireWakeLock();
+  showView('viewRunner');
+  document.getElementById('runBtnStop').disabled = false;
+  await startCurrentEntry();
+}
+
+let strCountdownInterval = null; // P1: global so we can clean it up
+
+async function startCurrentEntry() {
+  if (runEntryIndex >= runEntries.length) { finishWorkout(); return; }
+  const entry = runEntries[runEntryIndex];
+  const ex = getExercise(entry.exerciseId);
+  if (!ex) { runEntryIndex++; await startCurrentEntry(); return; }
+
+  if (ex.type === 'cardio' && entry.blocks?.length) {
+    const willUseBle = ex.bleConnectable && isBleConnected();
+
+    // P0: Require explicit confirmation before starting BLE treadmill after non-BLE entry
+    if (willUseBle && runEntryIndex > 0) {
+      showRunnerMode('strength');
+      document.getElementById('strExImg').style.display = 'none';
+      document.getElementById('strExName').textContent = '⚠️ Loopband start zo!';
+      document.getElementById('strSetLabel').textContent = 'Stap op de loopband';
+      document.getElementById('strDetail').textContent = ex.name;
+      document.getElementById('strWeight').textContent = '';
+      document.getElementById('strTimerArea').style.display = 'none';
+      document.getElementById('strPlayBtn').style.display = 'none';
+      document.getElementById('strCheckBtn').style.display = 'none';
+      document.getElementById('strActions').style.display = '';
+
+      await new Promise(resolve => {
+        const actions = document.getElementById('strActions');
+        actions.innerHTML = `<button class="btn btn-cyan" onclick="this.parentElement.dataset.confirmed='1'" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>`;
+        confirmWaitInterval = setInterval(() => {
+          if (actions.dataset.confirmed === '1') {
+            clearInterval(confirmWaitInterval); confirmWaitInterval = null;
+            delete actions.dataset.confirmed;
+            actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+            resolve();
+          }
+        }, 100);
+      });
+    }
+    await startCardioEntry(entry);
+  } else if (ex.type === 'cardio' && (!entry.blocks || !entry.blocks.length)) {
+    runEntryIndex++;
+    await startCurrentEntry();
+  } else {
+    startStrengthEntry(entry, ex);
+  }
+}
+
+async function startCardioEntry(entry) {
+  showRunnerMode('cardio');
+
+  // Set BLE flag for this cardio entry
+  const cardioEx = getExercise(runEntries[runEntryIndex]?.exerciseId);
+  currentCardioUsesBle = cardioEx?.bleConnectable && isBleConnected();
+
+  runSteps = [];
+  (entry.blocks || []).forEach((block, bi) => {
+    if (block.type === 'segment') {
+      runSteps.push({ speed: block.speed, incline: block.incline, duration: getSegDuration(block), label: '' });
+    } else {
+      for (let r = 0; r < block.repeats; r++) {
+        block.segments.forEach(seg => {
+          runSteps.push({ speed: seg.speed, incline: seg.incline, duration: getSegDuration(seg), label: `Set ${r+1}/${block.repeats}` });
+        });
+      }
+    }
+  });
   for (const s of runSteps) {
     s.speed = Math.max(0, Math.min(18, Number(s.speed) || 0));
     s.incline = Math.max(0, Math.min(15, Number(s.incline) || 0));
     s.duration = Math.max(1, Math.min(7200, Math.round(Number(s.duration) || 60)));
   }
-
   runIndex = 0;
   runSegElapsed = 0;
-  runTotalElapsed = 0;
   runTotalDuration = runSteps.reduce((s, st) => s + st.duration, 0);
-  runPaused = false;
-  runCalcDistance = 0;
 
-  enterFullscreen();
-  acquireWakeLock();
-
-  showView('viewRunner');
   renderRunChart();
   updateRunUI();
 
-  document.getElementById('runBtnPause').disabled = true;
-  document.getElementById('runBtnStop').disabled = false;
-  document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
-
-  const ok = await startAndSetSpeed(runSteps[0].speed, runSteps[0].incline);
-  if (!ok) return; // emergency mode already entered
+  if (currentCardioUsesBle) {
+    document.getElementById('runBtnPause').disabled = true;
+    document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
+    const ok = await startAndSetSpeed(runSteps[0].speed, runSteps[0].incline);
+    if (!ok) return;
+  }
 
   document.getElementById('runBtnPause').disabled = false;
   document.getElementById('runBtnPause').textContent = '⏸ Pauze';
-
   if (runTimer) clearInterval(runTimer);
   runTimer = setInterval(runTick, 1000);
+}
+
+function startStrengthEntry(entry, ex) {
+  showRunnerMode('strength');
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  strSetIndex = 0;
+  strSideIndex = 0;
+  strTimerActive = false;
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+
+  const img = document.getElementById('strExImg');
+  if (ex.imageUrl) { img.src = ex.imageUrl; img.style.display = ''; } else { img.style.display = 'none'; }
+  document.getElementById('strExName').textContent = ex.name;
+  document.getElementById('runBtnPause').disabled = true;
+  document.getElementById('strActions').style.display = '';
+  updateStrengthUI(entry, ex);
+}
+
+function updateStrengthUI(entry, ex) {
+  if (!entry) entry = runEntries[runEntryIndex];
+  if (!ex) ex = getExercise(entry?.exerciseId);
+  if (!entry || !ex) return;
+
+  const totalSets = entry.sets || 1;
+  const sides = ex.perSide ? 2 : 1;
+  const sideLabel = ex.perSide ? (strSideIndex === 0 ? ' · Links' : ' · Rechts') : '';
+  const setNum = strSetIndex * sides + strSideIndex + 1;
+
+  document.getElementById('strSetLabel').textContent = `Set ${setNum}/${totalSets * sides}${sideLabel}`;
+
+  if (ex.measureBy === 'reps') {
+    document.getElementById('strDetail').textContent = `${entry.reps || 0}× herhalingen`;
+  } else {
+    document.getElementById('strDetail').textContent = `${entry.duration || 0} seconden`;
+    strTimerTotal = entry.duration || 0;
+  }
+  document.getElementById('strWeight').textContent = entry.weight > 0 ? `${entry.weight} kg` : '';
+
+  const playBtn = document.getElementById('strPlayBtn');
+  const checkBtn = document.getElementById('strCheckBtn');
+  const timerArea = document.getElementById('strTimerArea');
+
+  if (ex.measureBy === 'duration') {
+    timerArea.style.display = '';
+    document.getElementById('strTimerDisplay').textContent = fmtTime(strTimerTotal);
+    document.getElementById('strTimerDisplay').style.color = 'var(--cyan)';
+    document.getElementById('strTimerProgress').style.width = '0%';
+    // Show play, hide check (check appears after timer finishes)
+    playBtn.style.display = '';
+    checkBtn.style.display = 'none';
+  } else {
+    timerArea.style.display = 'none';
+    // Rep-based: show check, hide play
+    playBtn.style.display = 'none';
+    checkBtn.style.display = '';
+  }
+}
+
+function strStartTimer() {
+  if (strTimerActive) return;
+  strTimerActive = true;
+  strTimerElapsed = 0;
+  document.getElementById('strPlayBtn').style.display = 'none';
+  document.getElementById('strCheckBtn').style.display = 'none';
+  const display = document.getElementById('strTimerDisplay');
+
+  let cd = 3;
+  display.textContent = cd;
+  display.style.color = 'var(--amber)';
+  playBeep();
+
+  strCountdownInterval = setInterval(() => {
+    cd--;
+    if (cd > 0) { display.textContent = cd; playBeep(); }
+    else {
+      clearInterval(strCountdownInterval); strCountdownInterval = null;
+      display.style.color = 'var(--cyan)';
+      playBeep();
+      strTimerInterval = setInterval(() => {
+        strTimerElapsed++;
+        runTotalElapsed++;
+        const rem = strTimerTotal - strTimerElapsed;
+        display.textContent = fmtTime(Math.max(0, rem));
+        document.getElementById('strTimerProgress').style.width = (strTimerElapsed / strTimerTotal * 100) + '%';
+        if (rem <= 3 && rem > 0) { display.style.color = 'var(--amber)'; playBeep(); }
+        if (rem <= 0) {
+          clearInterval(strTimerInterval); strTimerInterval = null;
+          strTimerActive = false;
+          display.textContent = '✓';
+          display.style.color = 'var(--green)';
+          document.getElementById('strCheckBtn').style.display = '';
+          playBeep(); setTimeout(playBeep, 200); setTimeout(playBeep, 400);
+        }
+      }, 1000);
+    }
+  }, 1000);
+}
+
+function strNextSet() {
+  const entry = runEntries[runEntryIndex];
+  const ex = getExercise(entry?.exerciseId);
+  if (!entry || !ex) return;
+
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
+  strTimerActive = false;
+
+  const sides = ex.perSide ? 2 : 1;
+  strSideIndex++;
+  if (strSideIndex >= sides) { strSideIndex = 0; strSetIndex++; }
+
+  if (strSetIndex >= (entry.sets || 1)) {
+    playBeep(); playBeep();
+    runEntryIndex++;
+    startCurrentEntry();
+    return;
+  }
+  playBeep();
+  updateStrengthUI(entry, ex);
+}
+
+function strSkipExercise() {
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
+  strTimerActive = false;
+  runEntryIndex++;
+  startCurrentEntry();
+}
+
+async function finishWorkout() {
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
+  showRunnerMode('strength');
+  const totalElapsed = Math.round((Date.now() - runStartTime) / 1000);
+  document.getElementById('strExImg').style.display = 'none';
+  document.getElementById('strExName').textContent = '✅ Workout voltooid!';
+  document.getElementById('strSetLabel').textContent = '';
+  document.getElementById('strDetail').textContent = `Totale tijd: ${fmtTime(totalElapsed)}`;
+  document.getElementById('strWeight').textContent = '';
+  document.getElementById('strTimerArea').style.display = 'none';
+  document.getElementById('strTimerBtn').style.display = 'none';
+  // Hide the "Volgende set" button area
+  document.getElementById('strActions').style.display = 'none';
+  document.getElementById('runBtnPause').disabled = true;
+  if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
+  playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
 }
 
 function runTick() {
@@ -1060,20 +1644,21 @@ function runTick() {
       return;
     }
     const next = runSteps[runIndex];
-    // P1: Segment transition with error handling
-    (async () => {
-      let failCount = 0;
-      for (let i = 0; i < 4; i++) {
-        const speedOk = await sendFTMSSpeed(next.speed);
-        await delay(100);
-        const inclOk = await sendFTMSIncline(next.incline);
-        await delay(400);
-        if (!speedOk || !inclOk) failCount++;
-      }
-      if (failCount >= 3) {
-        enterEmergency('Segmentwisseling mislukt!\nSnelheidscommando wordt niet geaccepteerd.');
-      }
-    })();
+    if (currentCardioUsesBle) {
+      (async () => {
+        let failCount = 0;
+        for (let i = 0; i < 4; i++) {
+          const speedOk = await sendFTMSSpeed(next.speed);
+          await delay(100);
+          const inclOk = await sendFTMSIncline(next.incline);
+          await delay(400);
+          if (!speedOk || !inclOk) failCount++;
+        }
+        if (failCount >= 3) {
+          enterEmergency('Segmentwisseling mislukt!\nSnelheidscommando wordt niet geaccepteerd.');
+        }
+      })();
+    }
     playBeep();
   }
 
@@ -1088,29 +1673,30 @@ async function togglePause() {
     runTimer = null;
     document.getElementById('runBtnPause').textContent = '▶ Hervat';
     document.getElementById('runSegLabel').textContent = '⏸ Gepauzeerd';
-    const resp = await bleWriteVerified([0x08, 0x02], 0x08);
-    // P0: If pause command fails, enter emergency
-    if (!resp.success) {
-      enterEmergency(`Pauze-commando mislukt: ${resp.reason}.\nLoopband kan nog draaien.`);
+    if (currentCardioUsesBle) {
+      const resp = await bleWriteVerified([0x08, 0x02], 0x08);
+      if (!resp.success) {
+        enterEmergency(`Pauze-commando mislukt: ${resp.reason}.\nLoopband kan nog draaien.`);
+      }
     }
   } else {
-    // RESUME — check connection first
-    if (!isBleConnected()) {
-      enterEmergency('Bluetooth niet meer verbonden!\nKan niet hervatten.');
-      return;
+    // RESUME
+    if (currentCardioUsesBle) {
+      if (!isBleConnected()) {
+        enterEmergency('Bluetooth niet meer verbonden!\nKan niet hervatten.');
+        return;
+      }
+      document.getElementById('runBtnPause').disabled = true;
+      document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
+      const step = runSteps[runIndex];
+      if (!step) return;
+      const ok = await startAndSetSpeed(step.speed, step.incline);
+      if (!ok) return;
     }
-    document.getElementById('runBtnPause').disabled = true;
-    document.getElementById('runSegLabel').textContent = '⏳ Loopband opschakelen...';
-
-    const step = runSteps[runIndex];
-    if (!step) return;
-    const ok = await startAndSetSpeed(step.speed, step.incline);
-    if (!ok) return;
 
     runPaused = false;
     document.getElementById('runBtnPause').disabled = false;
     document.getElementById('runBtnPause').textContent = '⏸ Pauze';
-
     runTimer = setInterval(runTick, 1000);
   }
 }
@@ -1118,12 +1704,16 @@ async function togglePause() {
 async function stopRunner() {
   if (runTimer) clearInterval(runTimer);
   runTimer = null;
-  const ok = await sendFTMSStop();
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
+  if (confirmWaitInterval) { clearInterval(confirmWaitInterval); confirmWaitInterval = null; }
+  strTimerActive = false;
+  const ok = currentCardioUsesBle && isBleConnected() ? await sendFTMSStop() : true;
+  currentCardioUsesBle = false;
   if (!ok) {
     enterEmergency('Stop-commando mislukt!\nGebruik de fysieke noodstop!');
     return;
   }
-  // Only release after confirmed stop
   releaseWakeLock();
   exitFullscreen();
   showView('viewHome');
@@ -1132,17 +1722,14 @@ async function stopRunner() {
 async function finishRunner() {
   if (runTimer) clearInterval(runTimer);
   runTimer = null;
-  document.getElementById('runSegLabel').textContent = '✅ Workout voltooid!';
-  document.getElementById('runSegTimer').textContent = '🎉';
-  document.getElementById('runSpeed').textContent = '0.0';
-  document.getElementById('runPace').textContent = '--:--';
-  document.getElementById('runBtnPause').disabled = true;
-  const ok = await sendFTMSStop();
-  if (!ok) {
-    enterEmergency('Stop-commando mislukt na voltooiing!\nGebruik de fysieke noodstop.');
-    return;
+  if (currentCardioUsesBle && isBleConnected()) {
+    const ok = await sendFTMSStop();
+    if (!ok) { enterEmergency('Stop-commando mislukt na cardio!\nGebruik de fysieke noodstop.'); return; }
   }
-  playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
+  currentCardioUsesBle = false;
+  playBeep(); playBeep();
+  runEntryIndex++;
+  await startCurrentEntry();
 }
 
 function formatPhase() {
@@ -1221,9 +1808,9 @@ function updateRunUI() {
   document.getElementById('runSpeed').textContent = step.speed.toFixed(1);
   document.getElementById('runPace').textContent = step.speed > 0 ? kmhToPace(step.speed) : '--:--';
 
-  // P0: Speed mismatch & telemetry freshness monitoring
+  // Speed mismatch & telemetry freshness monitoring (only for BLE cardio)
   const actualEl = document.getElementById('runActualSpeed');
-  if (actualEl) {
+  if (actualEl && currentCardioUsesBle) {
     const telemetryAge = Date.now() - lastTelemetryTime;
     const telemetryStale = lastTelemetryTime > 0 && telemetryAge > STALE_TELEMETRY_MS;
 
@@ -1250,6 +1837,9 @@ function updateRunUI() {
         speedMismatchCount = 0;
       }
     }
+  } else if (actualEl) {
+    // Non-BLE cardio: hide stale actual speed from previous BLE entry
+    actualEl.style.display = 'none';
   }
 
   // Segment label
@@ -1787,27 +2377,20 @@ document.addEventListener('visibilitychange', () => {
 let orientationLocked = false;
 
 async function enterFullscreen() {
-  // Must await fullscreen before orientation lock is allowed
   try {
     const el = document.documentElement;
     if (el.requestFullscreen) await el.requestFullscreen();
     else if (el.webkitRequestFullscreen) await el.webkitRequestFullscreen();
   } catch (e) { console.warn('Fullscreen failed:', e); }
 
-  // Try to allow free rotation even when system lock is on
+  // In fullscreen, proper API can override system rotation lock
   try {
     await screen.orientation.lock('any');
     orientationLocked = true;
-    console.log('Orientation unlocked via API');
-  } catch (e) {
-    console.warn('Orientation API failed, using accelerometer fallback:', e.message);
-    orientationLocked = false;
-    enableOrientationFallback();
-  }
+  } catch (e) { orientationLocked = false; }
 }
 
 function exitFullscreen() {
-  disableOrientationFallback();
   if (orientationLocked) {
     try { screen.orientation.unlock(); } catch (e) {}
     orientationLocked = false;
@@ -1818,38 +2401,32 @@ function exitFullscreen() {
   } catch (e) {}
 }
 
-/* --- Fallback: manual rotation via accelerometer (requires HTTPS) --- */
+/* --- Accelerometer rotation for entire app (always active) --- */
 let orientationFallbackActive = false;
 let currentRotation = 'portrait';
 
 function enableOrientationFallback() {
   if (orientationFallbackActive) return;
-  orientationFallbackActive = true;
 
-  // iOS requires explicit permission
+  // iOS needs permission from a user gesture — hook into first tap
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(state => {
-      if (state === 'granted') {
-        window.addEventListener('deviceorientation', onDeviceOrientation);
-        console.log('DeviceOrientation fallback active (iOS permission granted)');
-      } else {
-        console.warn('DeviceOrientation permission denied');
-      }
-    }).catch(e => console.warn('DeviceOrientation permission error:', e));
-  } else if ('DeviceOrientationEvent' in window) {
-    window.addEventListener('deviceorientation', onDeviceOrientation);
-    console.log('DeviceOrientation fallback active');
-  } else {
-    console.warn('DeviceOrientation not available — rotation fallback disabled');
+    document.addEventListener('click', function iosOrientationPermission() {
+      document.removeEventListener('click', iosOrientationPermission);
+      DeviceOrientationEvent.requestPermission().then(state => {
+        if (state === 'granted') {
+          orientationFallbackActive = true;
+          window.addEventListener('deviceorientation', onDeviceOrientation);
+        }
+      }).catch(() => {});
+    }, { once: true });
+    return;
   }
-}
 
-function disableOrientationFallback() {
-  if (!orientationFallbackActive) return;
-  orientationFallbackActive = false;
-  window.removeEventListener('deviceorientation', onDeviceOrientation);
-  removeManualRotation();
+  if ('DeviceOrientationEvent' in window) {
+    orientationFallbackActive = true;
+    window.addEventListener('deviceorientation', onDeviceOrientation);
+  }
 }
 
 function onDeviceOrientation(event) {
@@ -1871,40 +2448,39 @@ function onDeviceOrientation(event) {
 }
 
 function applyManualRotation(direction) {
-  const runner = document.getElementById('runnerLayout');
-  if (!runner) return;
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   const deg = direction === 'landscape-right' ? 90 : -90;
   const tx = direction === 'landscape-right' ? vh : 0;
   const ty = direction === 'landscape-right' ? 0 : vw;
-  runner.style.transform = `rotate(${deg}deg)`;
-  runner.style.transformOrigin = 'top left';
-  runner.style.width = vh + 'px';
-  runner.style.height = vw + 'px';
-  runner.style.position = 'fixed';
-  runner.style.top = ty + 'px';
-  runner.style.left = tx + 'px';
+  document.body.style.transform = `rotate(${deg}deg)`;
+  document.body.style.transformOrigin = 'top left';
+  document.body.style.width = vh + 'px';
+  document.body.style.height = vw + 'px';
+  document.body.style.position = 'fixed';
+  document.body.style.top = ty + 'px';
+  document.body.style.left = tx + 'px';
+  document.body.style.overflow = 'auto';
 }
 
 function removeManualRotation() {
-  const runner = document.getElementById('runnerLayout');
-  if (!runner) return;
-  runner.style.transform = '';
-  runner.style.transformOrigin = '';
-  runner.style.width = '';
-  runner.style.height = '';
-  runner.style.position = '';
-  runner.style.top = '';
-  runner.style.left = '';
+  document.body.style.transform = '';
+  document.body.style.transformOrigin = '';
+  document.body.style.width = '';
+  document.body.style.height = '';
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.overflow = '';
 }
 
 /* =============================================
    INIT
    ============================================= */
-// Apply saved theme
 applyTheme(localStorage.getItem('treadmill_theme') || 'light');
+enableOrientationFallback();
 renderWorkoutList();
+renderExerciseList();
 </script>
 </body>
 </html>
