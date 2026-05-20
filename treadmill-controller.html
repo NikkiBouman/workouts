@@ -278,37 +278,37 @@ input:focus { border-color:var(--cyan); }
 #viewRunner {
   position:fixed !important; top:0; left:0; right:0; bottom:0;
   z-index:100; background:var(--bg); margin:0; padding:0;
+  width:100vw; height:100vh; height:100dvh;
 }
 #viewRunner.active { display:block !important; }
 #runnerLayout {
-  display:flex; flex-direction:column; height:100dvh; height:100vh;
-  padding:0.5rem; gap:0.35rem; box-sizing:border-box; overflow:hidden;
+  display:flex; flex-direction:column; width:100%; height:100%;
 }
-#runnerChart { flex:0 0 auto; max-height:30vh; }
+#runnerChart { flex:0 0 auto; max-height:28vh; padding:0.35rem; overflow:hidden; }
 #runnerControls {
-  flex:1; display:flex; flex-direction:column; gap:0.35rem; min-height:0; overflow:hidden;
+  flex:1 1 0; display:flex; flex-direction:column; overflow:hidden;
 }
-#runnerCardioMode { flex:1; display:flex; flex-direction:column; gap:0.35rem; min-height:0; overflow-y:auto; }
-#runnerStrengthMode { min-height:0; overflow-y:auto; }
+#runnerCardioMode { flex:1 1 0; overflow-y:auto; padding:0 0.35rem; }
+#runnerStrengthMode {
+  flex:1 1 0; display:flex; flex-direction:column; overflow-y:auto;
+}
+#runBtnRow {
+  flex:0 0 auto; padding:0.5rem;
+  position:sticky; bottom:0; background:var(--bg);
+  z-index:10;
+}
 .run-card {
   background:var(--s1); border:1px solid var(--border);
-  border-radius:var(--r); padding:0.65rem 0.75rem; flex-shrink:0;
+  border-radius:var(--r); padding:0.5rem 0.65rem; margin-bottom:0.25rem;
 }
+.runner-actions { display:flex; gap:0.5rem; }
+.runner-actions button { flex:1; }
 
-/* Landscape: side by side */
 @media (orientation:landscape) {
-  #runnerLayout { flex-direction:row; gap:0.5rem; }
-  #runnerChart { flex:1 1 45%; min-width:0; max-height:none; }
-  #runnerControls { flex:1 1 55%; min-width:0; }
-  #runChartWrap { height:100%; display:flex; align-items:center; }
-  #runChartSvg { width:100%; }
-}
-
-/* Small portrait phones: even tighter */
-@media (orientation:portrait) and (max-height:700px) {
-  #runnerLayout { gap:0.2rem; padding:0.25rem; }
-  .run-card { padding:0.4rem 0.5rem; }
-  #runnerChart { max-height:25vh; }
+  #runnerLayout { flex-direction:row; flex-wrap:wrap; }
+  #runnerChart { flex:0 0 45%; max-height:none; height:calc(100% - 50px); }
+  #runnerControls { flex:0 0 55%; height:calc(100% - 50px); }
+  #runBtnRow { flex:0 0 100%; position:sticky; bottom:0; }
 }
 
 .unit-btn {
@@ -614,7 +614,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       </div>
 
       <!-- === STRENGTH MODE === -->
-      <div id="runnerStrengthMode" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div id="runnerStrengthMode" style="display:none;">
         <img id="strExImg" class="str-img" src="" onerror="this.style.display='none'">
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:1rem;gap:0.35rem;">
           <div id="strExName" style="font-size:1rem;font-weight:600;color:var(--muted);"></div>
@@ -634,12 +634,12 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
         </div>
       </div>
 
-      <!-- Buttons (always visible) -->
-      <div id="runBtnRow" class="runner-actions" style="margin-top:auto;">
-        <button class="btn btn-ghost hidden" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
-        <button class="btn btn-ghost hidden" id="runBtnSkip" onclick="strSkipExercise()">⏭ Skip</button>
-        <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled style="flex:1;">⏹ Stop</button>
-      </div>
+      <!-- Buttons (always at bottom, outside scrollable area) -->
+    </div>
+    <div id="runBtnRow" class="runner-actions">
+      <button class="btn btn-ghost hidden" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
+      <button class="btn btn-ghost hidden" id="runBtnSkip" onclick="strSkipExercise()">⏭ Skip</button>
+      <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled style="flex:1;">⏹ Stop</button>
     </div>
   </div>
 </div>
@@ -806,7 +806,7 @@ function renderHistory() {
    EXERCISE EDITOR
    ============================================= */
 let editingExId = null;
-let exState = { type:'cardio', perSide:false, measureBy:'reps', weighted:false, bleConnectable:true };
+let exState = { type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false };
 
 function openExerciseEditor(id) {
   editingExId = id;
@@ -1416,11 +1416,10 @@ let strTimerInterval = null;
 function showRunnerMode(mode) {
   runMode = mode;
   document.getElementById('runnerCardioMode').style.display = mode === 'cardio' ? '' : 'none';
-  const strEl = document.getElementById('runnerStrengthMode');
-  strEl.style.display = mode === 'strength' ? 'flex' : 'none';
+  document.getElementById('runnerStrengthMode').style.display = mode === 'strength' ? 'flex' : 'none';
   document.getElementById('runnerChart').style.display = mode === 'cardio' ? '' : 'none';
   document.getElementById('runBtnPause').classList.toggle('hidden', mode !== 'cardio');
-  document.getElementById('runBtnSkip').classList.toggle('hidden', mode !== 'strength');
+  document.getElementById('runBtnSkip').classList.remove('hidden');
 }
 
 async function startRunner() {
@@ -1429,12 +1428,6 @@ async function startRunner() {
   const wk = migrateWorkout(raw);
   runEntries = wk.entries || [];
   if (!runEntries.length) { alert('Workout is leeg'); return; }
-
-  const needsBle = runEntries.some(e => getExercise(e.exerciseId)?.bleConnectable);
-  if (needsBle && !isBleConnected()) {
-    alert('Deze workout bevat hardlopen — verbind eerst met de loopband!');
-    return;
-  }
 
   runEntryIndex = 0;
   runTotalElapsed = 0;
@@ -1446,6 +1439,8 @@ async function startRunner() {
   acquireWakeLock();
   showView('viewRunner');
   document.getElementById('runBtnStop').disabled = false;
+  // Restore strength UI buttons (may have been replaced by finish screen)
+  document.getElementById('strActions').innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
   await startCurrentEntry();
 }
 
@@ -1457,42 +1452,77 @@ async function startCurrentEntry() {
   const ex = getExercise(entry.exerciseId);
   if (!ex) { runEntryIndex++; await startCurrentEntry(); return; }
 
-  if (ex.type === 'cardio' && entry.blocks?.length) {
-    const willUseBle = ex.bleConnectable && isBleConnected();
-
-    // P0: Require explicit confirmation before starting BLE treadmill after non-BLE entry
-    if (willUseBle && runEntryIndex > 0) {
-      showRunnerMode('strength');
-      document.getElementById('strExImg').style.display = 'none';
-      document.getElementById('strExName').textContent = '⚠️ Loopband start zo!';
-      document.getElementById('strSetLabel').textContent = 'Stap op de loopband';
-      document.getElementById('strDetail').textContent = ex.name;
-      document.getElementById('strWeight').textContent = '';
-      document.getElementById('strTimerArea').style.display = 'none';
-      document.getElementById('strPlayBtn').style.display = 'none';
-      document.getElementById('strCheckBtn').style.display = 'none';
-      document.getElementById('strActions').style.display = '';
-
-      await new Promise(resolve => {
-        const actions = document.getElementById('strActions');
-        actions.innerHTML = `<button class="btn btn-cyan" onclick="this.parentElement.dataset.confirmed='1'" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>`;
-        confirmWaitInterval = setInterval(() => {
-          if (actions.dataset.confirmed === '1') {
-            clearInterval(confirmWaitInterval); confirmWaitInterval = null;
-            delete actions.dataset.confirmed;
-            actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
-            resolve();
-          }
-        }, 100);
-      });
-    }
-    await startCardioEntry(entry);
-  } else if (ex.type === 'cardio' && (!entry.blocks || !entry.blocks.length)) {
+  // Empty cardio: skip
+  if (ex.type === 'cardio' && (!entry.blocks || !entry.blocks.length)) {
     runEntryIndex++;
     await startCurrentEntry();
+    return;
+  }
+
+  if (ex.type === 'cardio' && entry.blocks?.length) {
+    const needsBle = ex.bleConnectable;
+
+    // If BLE needed but not connected: prompt to connect or skip (loop until resolved)
+    if (needsBle && !isBleConnected()) {
+      let resolved = false;
+      while (!resolved) {
+        const choice = await showEntryPrompt(
+          '🔗 Loopband niet verbonden',
+          `${ex.name} heeft een loopband-verbinding nodig.`,
+          [{ label: '🔗 Verbind', value: 'connect' }, { label: '⏭ Skip', value: 'skip' }]
+        );
+        if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
+        if (choice === 'connect') {
+          await bleConnect();
+          if (isBleConnected()) resolved = true;
+          // If still not connected, loop back to prompt
+        }
+      }
+    }
+
+    // If BLE and connected: confirm before starting belt
+    if (needsBle && isBleConnected()) {
+      const choice = await showEntryPrompt(
+        '⚠️ Loopband start zo!',
+        `Stap op de loopband — ${ex.name}`,
+        [{ label: '▶ Start', value: 'start' }, { label: '⏭ Skip', value: 'skip' }]
+      );
+      if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
+    }
+
+    await startCardioEntry(entry);
   } else {
     startStrengthEntry(entry, ex);
   }
+}
+
+// Generic prompt screen using the strength UI
+function showEntryPrompt(title, subtitle, buttons) {
+  return new Promise(resolve => {
+    showRunnerMode('strength');
+    document.getElementById('strExImg').style.display = 'none';
+    document.getElementById('strExName').textContent = title;
+    document.getElementById('strSetLabel').textContent = subtitle;
+    document.getElementById('strDetail').textContent = '';
+    document.getElementById('strWeight').textContent = '';
+    document.getElementById('strTimerArea').style.display = 'none';
+    const actions = document.getElementById('strActions');
+    actions.style.display = '';
+    actions.innerHTML = buttons.map(b =>
+      `<button class="btn ${b.value === 'skip' ? 'btn-ghost' : 'btn-cyan'}" onclick="this.parentElement.dataset.choice='${b.value}'" style="padding:1rem 2rem;font-size:1rem;font-weight:700;border-radius:var(--r);margin:0.25rem;">${b.label}</button>`
+    ).join('');
+
+    confirmWaitInterval = setInterval(() => {
+      if (actions.dataset.choice) {
+        clearInterval(confirmWaitInterval); confirmWaitInterval = null;
+        const choice = actions.dataset.choice;
+        delete actions.dataset.choice;
+        // Restore buttons
+        actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+        resolve(choice);
+      }
+    }, 100);
+  });
 }
 
 async function startCardioEntry(entry) {
@@ -1658,12 +1688,19 @@ function strNextSet() {
   updateStrengthUI(entry, ex);
 }
 
-function strSkipExercise() {
+async function strSkipExercise() {
+  // Clean up any running timers
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
+  // Stop treadmill if active
+  if (currentCardioUsesBle && isBleConnected()) {
+    await sendFTMSStop();
+  }
+  currentCardioUsesBle = false;
   runEntryIndex++;
-  startCurrentEntry();
+  await startCurrentEntry();
 }
 
 async function finishWorkout() {
@@ -2023,9 +2060,11 @@ async function bleConnect() {
 function onBleDisconnect() {
   hasControl = false;
   updateConnUI(false);
-  if (isRunnerActive()) {
+  // Only emergency if we're actively controlling the treadmill right now
+  if (currentCardioUsesBle && runMode === 'cardio' && runTimer) {
     enterEmergency('Bluetooth verbinding verloren!\nDe app kan de loopband niet meer aansturen.');
   }
+  currentCardioUsesBle = false;
 }
 
 function bleDisconnect() {
