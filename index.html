@@ -660,19 +660,9 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 /* =============================================
    DATA MODEL & STORAGE
    ============================================= */
-const WORKOUTS_KEY = 'treadmill_workouts';
-const EXERCISES_KEY = 'treadmill_exercises';
+function loadWorkouts() { return window.DB.workouts(); }
 
-function loadWorkouts() {
-  try { return JSON.parse(localStorage.getItem(WORKOUTS_KEY)) || []; }
-  catch { return []; }
-}
-function saveWorkoutsData(list) { localStorage.setItem(WORKOUTS_KEY, JSON.stringify(list)); }
-
-const SEEDED_KEY = 'treadmill_seeded_defaults';
-const DEFAULTS_VERSION_KEY = 'treadmill_defaults_version';
-// Bump when the category/measurement/image of a default exercise changes, so that
-// already-seeded defaults get re-synced to their new definition (see loadExercises).
+// Bump when the category/measurement/image of a default exercise changes.
 const DEFAULTS_VERSION = 2;
 
 // Default exercise library. Images live in ./images/ (relative paths).
@@ -727,52 +717,7 @@ function exMeta(ex) {
 // True when an exercise drives the treadmill timeline; everything else uses the set/timer screen.
 function usesTreadmill(ex) { return !!(ex && ex.bleConnectable); }
 
-function loadExercises() {
-  let list = [];
-  try {
-    const stored = JSON.parse(localStorage.getItem(EXERCISES_KEY));
-    if (Array.isArray(stored)) list = stored;
-  } catch {}
-
-  let changed = false;
-
-  // One-time re-sync: when DEFAULTS_VERSION bumps, bring already-seeded default
-  // exercises in line with their new definition (category, measurement, image).
-  // Only touches known default ids; a custom name the user set is preserved.
-  let dver = 0;
-  try { dver = parseInt(localStorage.getItem(DEFAULTS_VERSION_KEY), 10) || 0; } catch {}
-  if (dver < DEFAULTS_VERSION) {
-    const byId = new Map(DEFAULT_EXERCISES.map(d => [d.id, d]));
-    list = list.map(e => {
-      const def = byId.get(e.id);
-      return def ? { ...def, name: e.name || def.name } : e;
-    });
-    changed = true;
-  }
-
-  // Seed defaults once per id. We track which defaults have ever been seeded so
-  // that (a) existing users still get newly added defaults, and (b) a default the
-  // user deliberately deleted does not keep reappearing.
-  let seeded;
-  try { seeded = new Set(JSON.parse(localStorage.getItem(SEEDED_KEY)) || []); }
-  catch { seeded = new Set(); }
-
-  const existingIds = new Set(list.map(e => e.id));
-  for (const def of DEFAULT_EXERCISES) {
-    if (seeded.has(def.id)) continue;
-    if (!existingIds.has(def.id)) { list.push(def); }
-    seeded.add(def.id);
-    changed = true;
-  }
-
-  if (changed) {
-    localStorage.setItem(EXERCISES_KEY, JSON.stringify(list));
-    localStorage.setItem(SEEDED_KEY, JSON.stringify([...seeded]));
-    localStorage.setItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
-  }
-  return list;
-}
-function saveExercises(list) { localStorage.setItem(EXERCISES_KEY, JSON.stringify(list)); }
+function loadExercises() { return window.DB.exercises(); }
 
 function getExercise(id) { return loadExercises().find(e => e.id === id); }
 
@@ -864,13 +809,13 @@ function renderExerciseList() {
 
 function deleteWorkout(id) {
   if (!confirm('Workout verwijderen?')) return;
-  saveWorkoutsData(loadWorkouts().filter(w => w.id !== id));
+  window.DB.deleteWorkout(id);
   renderWorkoutList();
 }
 
 function deleteExercise(id) {
   if (!confirm('Oefening verwijderen?')) return;
-  saveExercises(loadExercises().filter(e => e.id !== id));
+  window.DB.deleteExercise(id);
   renderExerciseList();
 }
 
@@ -886,11 +831,11 @@ function renderHistory() {
     const dateStr = d.toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
     const timeStr = d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' });
     const exList = h.exercises.map(e => {
-      let detail = e.exerciseName;
-      if (e.sets) {
-        detail += ` ${e.sets}×${e.reps || e.duration + 's'}`;
-        if (e.weight > 0) detail += ` ${e.weight}kg`;
-      }
+      const n = (e.sets || []).length;
+      const top = (e.sets || []).reduce((m, s) => Math.max(m, s.weight || 0), 0);
+      let detail = e.name || e.exerciseName || '?';
+      if (n) detail += ` ${n}×`;
+      if (top > 0) detail += ` ${top}kg`;
       return detail;
     }).join(' · ');
     return `<div style="padding:0.5rem 0.65rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;">
@@ -967,10 +912,11 @@ function previewExImage() {
 function saveExercise() {
   const name = document.getElementById('exName').value.trim();
   if (!name) { alert('Geef de oefening een naam'); return; }
-  const list = loadExercises();
   const isCardio = exState.type === 'cardio';
   const isSetBased = exState.type === 'strength' || exState.type === 'stretch';
+  const existing = editingExId ? loadExercises().find(e => e.id === editingExId) : null;
   const ex = {
+    ...(existing || {}),
     id: editingExId || 'ex_' + Date.now(),
     name,
     imageUrl: document.getElementById('exImageUrl').value.trim(),
@@ -980,13 +926,7 @@ function saveExercise() {
     weighted: exState.type === 'strength' ? exState.weighted : false,
     bleConnectable: isCardio ? exState.bleConnectable : false,
   };
-  if (editingExId) {
-    const idx = list.findIndex(e => e.id === editingExId);
-    if (idx >= 0) list[idx] = { ...list[idx], ...ex };
-  } else {
-    list.push(ex);
-  }
-  saveExercises(list);
+  window.DB.upsertExercise(ex);
   showView('viewHome');
 }
 
@@ -1257,14 +1197,14 @@ function removeCardioSeg(ei, bi, si) {
 
 function saveWorkout() {
   const name = document.getElementById('editorName').value.trim() || 'Workout';
-  const list = loadWorkouts();
+  let w;
   if (editingId) {
-    const idx = list.findIndex(w => w.id === editingId);
-    if (idx >= 0) { list[idx].name = name; list[idx].entries = editorEntries; delete list[idx].blocks; }
+    w = { ...loadWorkouts().find(x => x.id === editingId), id: editingId, name, entries: editorEntries };
+    delete w.blocks;
   } else {
-    list.push({ id: 'w_' + Date.now(), name, entries: editorEntries });
+    w = { id: 'w_' + Date.now(), name, entries: editorEntries };
   }
-  saveWorkoutsData(list);
+  window.DB.upsertWorkout(w);
   showView('viewHome');
 }
 
@@ -2622,32 +2562,26 @@ function exitFullscreen() {
 /* =============================================
    WORKOUT HISTORY
    ============================================= */
-const HISTORY_KEY = 'treadmill_history';
-
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem(HISTORY_KEY)) || []; } catch { return []; }
-}
+function loadHistory() { return window.DB.sessions(); }
 
 function logWorkoutCompletion(workout) {
-  const history = loadHistory();
-  const entries = (workout.entries || []).map(e => {
-    const ex = getExercise(e.exerciseId);
+  const exercises = (workout.entries || []).map(e => {
+    const ex = getExercise(e.exerciseId) || {};
     return {
-      exerciseName: ex?.name || '?',
-      exerciseId: e.exerciseId,
-      type: ex?.type || '?',
-      sets: e.sets, reps: e.reps, duration: e.duration, weight: e.weight,
+      exerciseId: e.exerciseId, name: ex.name || '?', type: ex.type || '?',
+      measureBy: ex.measureBy || null, weighted: !!ex.weighted,
+      sets: Array.from({ length: e.sets || 1 }, () => ({
+        weight: e.weight ?? null, reps: e.reps ?? null, duration: e.duration ?? null,
+      })),
     };
   });
-  history.unshift({
+  window.DB.addSession({
+    id: crypto.randomUUID(),
     date: new Date().toISOString(),
-    workoutName: workout.name,
+    workoutId: workout.id, workoutName: workout.name,
     totalSeconds: Math.round((Date.now() - runStartTime) / 1000),
-    exercises: entries,
+    exercises,
   });
-  // Keep last 100
-  if (history.length > 100) history.length = 100;
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
 }
 
 /* =============================================
@@ -2684,11 +2618,13 @@ window.APP = {
   });
   signOutBtn.addEventListener('click', () => DB.signOut());
 
+  DB.onChange(() => window.APP.onChange());
+
   DB.onAuthChange(async (user) => {
     signOutBtn.style.display = user ? '' : 'none';
-    if (!user) { gate.style.display = 'flex'; return; }
+    if (!user) { DB.stop?.(); gate.style.display = 'flex'; return; }
     gate.style.display = 'none';
-    // Task 1.2 adds: await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
+    await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
     window.APP.onReady(user);
   });
 </script>
