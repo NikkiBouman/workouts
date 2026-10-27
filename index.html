@@ -633,6 +633,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
           <div id="strSetLabel" style="font-family:var(--mono);font-size:2rem;font-weight:800;line-height:1.2;"></div>
           <div id="strDetail" style="font-family:var(--mono);font-size:1rem;color:var(--muted);"></div>
           <div id="strWeight" style="font-family:var(--mono);font-size:0.9rem;color:var(--muted);"></div>
+          <div id="strCapture" class="row" style="gap:0.75rem;justify-content:center;margin-top:0.5rem;"></div>
           <div id="strTimerArea" style="display:none;margin:0.5rem 0;">
             <div id="strTimerDisplay" style="font-family:var(--mono);font-size:4rem;font-weight:800;color:var(--cyan);">0:00</div>
             <div style="height:6px;background:var(--s3);border-radius:3px;overflow:hidden;margin-top:0.5rem;width:240px;margin-left:auto;margin-right:auto;">
@@ -1481,6 +1482,7 @@ async function startRunner() {
   if (!runEntries.length) { alert('Workout is leeg'); return; }
 
   runEntryIndex = 0;
+  window.runLog = {};
   runTotalElapsed = 0;
   runCalcDistance = 0;
   runPaused = false;
@@ -1654,6 +1656,17 @@ function updateStrengthUI(entry, ex) {
   }
   document.getElementById('strWeight').textContent = entry.weight > 0 ? `${entry.weight} kg` : '';
 
+  const capWrap = document.getElementById('strCapture');
+  if (ex.measureBy === 'reps') {
+    capWrap.style.display = '';
+    capWrap.innerHTML = `
+      <label>Reps <input type="number" id="capReps" min="0" max="100" value="${entry.reps || 0}" style="width:64px;"></label>
+      ${ex.weighted ? `<label>kg <input type="number" id="capWeight" min="0" max="500" step="0.5" value="${entry.weight || 0}" style="width:72px;"></label>` : ''}
+    `;
+  } else {
+    capWrap.style.display = 'none';
+  }
+
   const playBtn = document.getElementById('strPlayBtn');
   const checkBtn = document.getElementById('strCheckBtn');
   const timerArea = document.getElementById('strTimerArea');
@@ -1723,6 +1736,21 @@ function strNextSet() {
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
 
+  const repsEl = document.getElementById('capReps');
+  const wEl = document.getElementById('capWeight');
+  const set = {
+    weight: wEl ? (+wEl.value || 0) : (ex.weighted ? (entry.weight || 0) : null),
+    reps: ex.measureBy === 'reps' ? (repsEl ? (+repsEl.value || 0) : (entry.reps || 0)) : null,
+    duration: ex.measureBy === 'duration' ? (entry.duration || 0) : null,
+  };
+  if (!window.runLog[entry.exerciseId]) {
+    window.runLog[entry.exerciseId] = {
+      exerciseId: entry.exerciseId, name: ex.name, type: ex.type,
+      measureBy: ex.measureBy || null, weighted: !!ex.weighted, sets: [],
+    };
+  }
+  window.runLog[entry.exerciseId].sets.push(set);
+
   const sides = ex.perSide ? 2 : 1;
   strSideIndex++;
   if (strSideIndex >= sides) { strSideIndex = 0; strSetIndex++; }
@@ -1734,6 +1762,8 @@ function strNextSet() {
     return;
   }
   playBeep();
+  if (set.reps != null) entry.reps = set.reps;
+  if (set.weight != null) entry.weight = set.weight;
   updateStrengthUI(entry, ex);
 }
 
