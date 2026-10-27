@@ -547,6 +547,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
   <div class="preview-name" id="previewName"></div>
   <div class="preview-stats" id="previewStats"></div>
   <div id="previewChart" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem 0.5rem 0.25rem 0.5rem;margin-bottom:0.75rem;overflow:hidden;"></div>
+  <div id="previewLogControls" style="margin-bottom:0.75rem;"></div>
   <div id="previewBlocks" style="margin-bottom:1rem;"></div>
   <button class="btn btn-green btn-full" onclick="startRunner()" style="padding:1rem;font-size:1.1rem;font-weight:800;">
     ▶ Start Workout
@@ -1433,6 +1434,26 @@ function openPreview(id) {
   });
 
   document.getElementById('previewBlocks').innerHTML = blocksHtml;
+
+  // --- Logging controls ---
+  const logCtl = document.getElementById('previewLogControls');
+  logCtl.innerHTML = `
+    <label style="display:flex;align-items:center;gap:0.5rem;font-weight:700;">
+      <input type="checkbox" id="logMaster" checked> Workout loggen
+    </label>
+    <div id="logPerExercise" style="margin-top:0.4rem;display:flex;flex-direction:column;gap:0.25rem;">
+      ${entries.map(e => {
+        const ex = getExercise(e.exerciseId);
+        return `<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--muted);">
+          <input type="checkbox" class="logEx" data-id="${e.exerciseId}" checked> ${esc(ex?.name || '?')}
+        </label>`;
+      }).join('')}
+    </div>`;
+  document.getElementById('logMaster').addEventListener('change', (ev) => {
+    document.getElementById('logPerExercise').style.opacity = ev.target.checked ? '1' : '0.4';
+    document.querySelectorAll('.logEx').forEach(c => c.disabled = !ev.target.checked);
+  });
+
   showView('viewPreview');
 }
 
@@ -1483,6 +1504,11 @@ async function startRunner() {
 
   runEntryIndex = 0;
   window.runLog = {};
+  window.logPlan = {
+    master: document.getElementById('logMaster')?.checked ?? true,
+    perExercise: {},
+  };
+  document.querySelectorAll('.logEx').forEach(c => { window.logPlan.perExercise[c.dataset.id] = c.checked; });
   runTotalElapsed = 0;
   runCalcDistance = 0;
   runPaused = false;
@@ -1792,7 +1818,20 @@ async function finishWorkout() {
 
   // Log to history
   const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
-  if (raw) logWorkoutCompletion(migrateWorkout(raw));
+  const plan = window.logPlan || { master: true, perExercise: {} };
+  if (raw && plan.master) {
+    const exercises = Object.values(window.runLog || {})
+      .filter(r => plan.perExercise[r.exerciseId] !== false && r.sets.length);
+    if (exercises.length) {
+      window.DB.addSession({
+        id: crypto.randomUUID(),
+        date: new Date().toISOString(),
+        workoutId: raw.id, workoutName: raw.name,
+        totalSeconds: Math.round((Date.now() - runStartTime) / 1000),
+        exercises,
+      });
+    }
+  }
 
   const totalElapsed = Math.round((Date.now() - runStartTime) / 1000);
 
@@ -2596,26 +2635,6 @@ function exitFullscreen() {
    WORKOUT HISTORY
    ============================================= */
 function loadHistory() { return window.DB.sessions(); }
-
-function logWorkoutCompletion(workout) {
-  const exercises = (workout.entries || []).map(e => {
-    const ex = getExercise(e.exerciseId) || {};
-    return {
-      exerciseId: e.exerciseId, name: ex.name || '?', type: ex.type || '?',
-      measureBy: ex.measureBy || null, weighted: !!ex.weighted,
-      sets: Array.from({ length: e.sets || 1 }, () => ({
-        weight: e.weight ?? null, reps: e.reps ?? null, duration: e.duration ?? null,
-      })),
-    };
-  });
-  window.DB.addSession({
-    id: crypto.randomUUID(),
-    date: new Date().toISOString(),
-    workoutId: workout.id, workoutName: workout.name,
-    totalSeconds: Math.round((Date.now() - runStartTime) / 1000),
-    exercises,
-  });
-}
 
 /* =============================================
    INIT
