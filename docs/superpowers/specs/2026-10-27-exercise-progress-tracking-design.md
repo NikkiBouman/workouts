@@ -39,7 +39,7 @@ The app is one static HTML file (~2600 lines) with all data in `localStorage`:
 | Backend | **Firebase Firestore + Firebase Auth** |
 | Login | **Google sign-in** (one tap, no password) |
 | Hosting | **GitHub Pages**, repo rename entry to `index.html` |
-| Chart | **Chart.js via CDN** (no build step) |
+| Chart | **Hand-rolled inline SVG**, matching the app's existing cardio chart idiom (`chartColors()`), zero dependencies |
 | Offline | Firestore offline persistence (`persistentLocalCache`) |
 | Data granularity | Per-set `{weight, reps}` (or `{duration}`) |
 | Logging control | Master "Workout loggen" toggle (default ON) **and** per-exercise checkboxes (default ON) |
@@ -135,7 +135,7 @@ Clicking an exercise opens a new **exercise-detail view**:
 
 - **Header:** image + name + category (`type`).
 - **Key stats:** times done (session count), last done (date), PR (max weight ever), current working weight (latest session topset).
-- **Chart (Chart.js line, x = date):** metric chosen by execution attributes, not category —
+- **Chart (hand-rolled SVG line, x = date):** drawn in the same style as the existing cardio preview chart (theme-aware via `chartColors()`), zero dependencies. Line + axes + points, with a tap-to-read tooltip. Metric chosen by execution attributes, not category —
   - `weighted` → **topset weight** per session, with a toggle to **total volume** (Σ sets×reps×weight);
   - `measureBy = 'reps'` and not weighted → **reps** per session;
   - `measureBy = 'duration'` → **duration** per session;
@@ -160,7 +160,7 @@ Clicking an exercise opens a new **exercise-detail view**:
 - **Phase 0 — Hosting:** enable GitHub Pages, rename entry to `index.html`. Multi-device access works at all.
 - **Phase 1 — Cloud data layer:** Firebase + Google auth + login gate + Firestore data layer (in-memory cache + `onSnapshot` listeners) + seed defaults. Replace `localStorage` reads/writes; keep offline cache.
 - **Phase 2 — Capture & logging:** editable per-set weight/reps, `runLog`, master + per-exercise logging toggles, write `sessions` from actual values, "als standaard opslaan" plan-weight update.
-- **Phase 3 — Progress view:** exercise-detail view + Chart.js chart + key stats + recent-sessions list.
+- **Phase 3 — Progress view:** exercise-detail view + hand-rolled SVG chart + key stats + recent-sessions list.
 
 Each phase is independently testable and shippable.
 
