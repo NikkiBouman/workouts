@@ -375,6 +375,11 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 </style>
 </head>
 <body>
+<div id="authGate" style="position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:1rem;background:var(--bg);">
+  <div class="logo-title" style="font-size:1.6rem;">Workout<span>Ctrl</span></div>
+  <button id="authSignInBtn" class="btn btn-cyan">Inloggen met Google</button>
+  <div id="authError" style="color:var(--muted);font-size:0.8rem;"></div>
+</div>
 <div class="app">
 
 <!-- Connection bars (global) -->
@@ -403,6 +408,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
     </div>
     <div class="logo-title">Workout<span>Ctrl</span></div>
     <div class="logo-sub">Treadmill &amp; Strength Workout Controller</div>
+    <button class="btn-icon" id="authSignOutBtn" title="Uitloggen">⎋</button>
   </div>
 
   <div style="margin-top:1.25rem;">
@@ -2648,10 +2654,42 @@ function logWorkoutCompletion(workout) {
    INIT
    ============================================= */
 applyTheme(localStorage.getItem('treadmill_theme') || 'light');
-renderWorkoutList();
-renderExerciseList();
-renderHistory();
-applySectionStates();
+
+function renderAll() {
+  renderWorkoutList();
+  renderExerciseList();
+  renderHistory();
+  applySectionStates();
+}
+
+window.APP = {
+  defaults: DEFAULT_EXERCISES,
+  defaultsVersion: DEFAULTS_VERSION,
+  onReady() { renderAll(); },   // extended in Task 1.2
+  onChange() { renderAll(); },
+};
+</script>
+<script type="module">
+  import * as DB from './src/db.js';
+  window.DB = DB;
+
+  const gate = document.getElementById('authGate');
+  const signInBtn = document.getElementById('authSignInBtn');
+  const signOutBtn = document.getElementById('authSignOutBtn');
+  const errEl = document.getElementById('authError');
+
+  signInBtn.addEventListener('click', () => {
+    errEl.textContent = '';
+    DB.signIn().catch(e => { errEl.textContent = e.message; });
+  });
+  signOutBtn.addEventListener('click', () => DB.signOut());
+
+  DB.onAuthChange(async (user) => {
+    if (!user) { gate.style.display = 'flex'; return; }
+    gate.style.display = 'none';
+    // Task 1.2 adds: await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
+    window.APP.onReady(user);
+  });
 </script>
 </body>
 </html>
