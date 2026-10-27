@@ -1664,6 +1664,7 @@ function updateStrengthUI(entry, ex) {
       ${ex.weighted ? `<label>kg <input type="number" id="capWeight" min="0" max="500" step="0.5" value="${entry.weight || 0}" style="width:72px;"></label>` : ''}
     `;
   } else {
+    capWrap.innerHTML = '';
     capWrap.style.display = 'none';
   }
 
