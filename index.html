@@ -1846,6 +1846,20 @@ async function finishWorkout() {
   document.getElementById('runBtnPause').disabled = true;
   document.getElementById('runBtnSkip').classList.add('hidden');
 
+  const wkForUpdate = loadWorkouts().find(w => w.id === previewWorkoutId);
+  const changed = [];
+  if (wkForUpdate) {
+    for (const r of Object.values(window.runLog || {})) {
+      const topW = r.sets.reduce((m, s) => Math.max(m, s.weight || 0), 0);
+      const topReps = r.sets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
+      const entry = (wkForUpdate.entries || []).find(e => e.exerciseId === r.exerciseId);
+      if (entry && r.weighted && topW && topW !== (entry.weight || 0)) {
+        changed.push({ exerciseId: r.exerciseId, name: r.name, topW, topReps });
+      }
+    }
+  }
+  window._pendingPlanUpdate = { workoutId: previewWorkoutId, changed };
+
   const actions = document.getElementById('strActions');
   actions.style.display = '';
   actions.innerHTML = `
@@ -1853,9 +1867,24 @@ async function finishWorkout() {
       <div style="width:120px;height:120px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:3rem;color:#fff;">✓</div>
       <div style="font-size:1.3rem;font-weight:800;margin-bottom:0.25rem;">Workout voltooid!</div>
       <div style="font-family:var(--mono);font-size:1rem;color:var(--muted);">${fmtTime(totalElapsed)}</div>
-    </div>`;
+    </div>
+    ${changed.length ? `<button class="btn btn-cyan btn-sm" onclick="applyPlanUpdate()">Nieuwe gewichten als standaard opslaan (${changed.length})</button>` : ''}`;
 
   playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
+}
+
+function applyPlanUpdate() {
+  const pu = window._pendingPlanUpdate;
+  if (!pu) return;
+  const w = loadWorkouts().find(x => x.id === pu.workoutId);
+  if (!w) return;
+  for (const c of pu.changed) {
+    const entry = (w.entries || []).find(e => e.exerciseId === c.exerciseId);
+    if (entry) { entry.weight = c.topW; if (c.topReps) entry.reps = c.topReps; }
+  }
+  window.DB.upsertWorkout(w);
+  window._pendingPlanUpdate = null;
+  alert('Workout bijgewerkt met je nieuwe gewichten.');
 }
 
 function runTick() {
