@@ -408,7 +408,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
     </div>
     <div class="logo-title">Workout<span>Ctrl</span></div>
     <div class="logo-sub">Treadmill &amp; Strength Workout Controller</div>
-    <button class="btn-icon" id="authSignOutBtn" title="Uitloggen">⎋</button>
+    <button class="btn-icon" id="authSignOutBtn" title="Uitloggen" style="display:none;">⎋</button>
   </div>
 
   <div style="margin-top:1.25rem;">
@@ -2685,6 +2685,7 @@ window.APP = {
   signOutBtn.addEventListener('click', () => DB.signOut());
 
   DB.onAuthChange(async (user) => {
+    signOutBtn.style.display = user ? '' : 'none';
     if (!user) { gate.style.display = 'flex'; return; }
     gate.style.display = 'none';
     // Task 1.2 adds: await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
