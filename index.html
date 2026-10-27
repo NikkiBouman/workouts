@@ -910,7 +910,63 @@ function renderExerciseDetail(id) {
   renderProgressChart(id);   // Task 3.3
 }
 
-function renderProgressChart() { /* implemented in Task 3.3 */ }
+let chartMode = 'weight'; // 'weight' | 'volume' (only meaningful when metric === 'weight')
+
+function renderProgressChart(id) {
+  const ex = getExercise(id);
+  const el = document.getElementById('exDetailChart');
+  if (!ex || !el) return;
+  const series = window.Progress.seriesForExercise(loadHistory(), id);
+  const metric = window.Progress.metricForExercise(ex);
+
+  if (series.length < 2) {
+    el.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0;">Minstens 2 sessies nodig voor een grafiek.</div>`;
+    return;
+  }
+
+  const pick = (p) => {
+    if (metric === 'weight') return chartMode === 'volume' ? p.volume : p.topWeight;
+    if (metric === 'duration') return p.maxDuration;
+    return p.maxReps;
+  };
+  const unit = metric === 'weight' ? (chartMode === 'volume' ? '' : 'kg') : (metric === 'duration' ? 's' : 'reps');
+
+  const cc = chartColors();
+  const cW = 380, cH = 160, padL = 34, padR = 10, padT = 12, padB = 24;
+  const plotW = cW - padL - padR, plotH = cH - padT - padB;
+  const vals = series.map(pick);
+  const yMax = Math.max(1, Math.ceil(Math.max(...vals) * 1.1));
+  const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+  const y = v => padT + plotH - (v / yMax) * plotH;
+
+  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const val = (yMax / ySteps) * i, yy = y(val);
+    svg += `<line x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 4}" y="${yy + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  const line = series.map((p, i) => `${x(i)},${y(pick(p))}`).join(' ');
+  svg += `<polyline points="${line}" fill="none" stroke="var(--cyan)" stroke-width="2"/>`;
+  series.forEach((p, i) => {
+    const v = pick(p);
+    svg += `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(--cyan)"><title>${new Date(p.date).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}: ${v}${unit}</title></circle>`;
+  });
+  // x labels: first and last date
+  const dLabel = d => new Date(d).toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+  svg += `<text x="${padL}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)">${dLabel(series[0].date)}</text>`;
+  svg += `<text x="${padL + plotW}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${dLabel(series[series.length-1].date)}</text>`;
+  svg += '</svg>';
+
+  const toggle = metric === 'weight'
+    ? `<div class="row" style="gap:0.5rem;margin-bottom:0.3rem;">
+         <button class="btn btn-sm ${chartMode==='weight'?'btn-cyan':''}" onclick="setChartMode('weight')">Gewicht</button>
+         <button class="btn btn-sm ${chartMode==='volume'?'btn-cyan':''}" onclick="setChartMode('volume')">Volume</button>
+       </div>` : '';
+  el.innerHTML = toggle + svg;
+}
+
+function setChartMode(m) { chartMode = m; renderProgressChart(detailExerciseId); }
 
 /* =============================================
    EXERCISE EDITOR
