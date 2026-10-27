@@ -411,6 +411,8 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
     <button class="btn-icon" id="authSignOutBtn" title="Uitloggen" style="display:none;">⎋</button>
   </div>
 
+  <div id="syncStatus" style="display:none;font-size:0.65rem;font-family:var(--mono);color:var(--amber);text-align:center;padding:0.2rem;">offline — wijzigingen worden later gesynct</div>
+
   <div style="margin-top:1.25rem;">
     <div class="row row-between" style="margin-bottom:0.75rem;cursor:pointer;" onclick="toggleSection('workouts')">
       <h3 style="margin:0;"><span id="workoutsArrow">▾</span> Mijn Workouts</h3>
@@ -2627,6 +2629,13 @@ window.APP = {
     await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
     window.APP.onReady(user);
   });
+
+  // Online/offline sync indicator
+  const sync = document.getElementById('syncStatus');
+  const refreshSync = () => { sync.style.display = navigator.onLine ? 'none' : 'block'; };
+  window.addEventListener('online', refreshSync);
+  window.addEventListener('offline', refreshSync);
+  refreshSync();
 </script>
 </body>
 </html>
