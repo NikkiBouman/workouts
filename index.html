@@ -557,7 +557,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 <!-- =========================================
      VIEW: EXERCISE DETAIL
      ========================================= -->
-<div id="viewExercise" class="view" style="display:none;">
+<div id="viewExercise" class="view">
   <button class="btn btn-sm" onclick="showView('viewHome')">← Terug</button>
   <div id="exDetailHeader"></div>
   <div id="exDetailStats" class="row" style="gap:1rem;flex-wrap:wrap;margin:0.75rem 0;"></div>
@@ -879,9 +879,9 @@ function renderExerciseDetail(id) {
 
   document.getElementById('exDetailHeader').innerHTML = `
     <div class="row" style="gap:0.75rem;align-items:center;">
-      ${ex.imageUrl ? `<img src="${ex.imageUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:var(--r-sm);">` : ''}
+      ${ex.imageUrl ? `<img src="${esc(ex.imageUrl)}" style="width:56px;height:56px;object-fit:cover;border-radius:var(--r-sm);">` : ''}
       <div><div style="font-weight:700;font-size:1.1rem;">${esc(ex.name)}</div>
-      <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${ex.type}</div></div>
+      <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${esc(ex.type)}</div></div>
     </div>`;
 
   const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' }) : '—';
@@ -2797,7 +2797,7 @@ window.APP = {
   defaults: DEFAULT_EXERCISES,
   defaultsVersion: DEFAULTS_VERSION,
   onReady() { renderAll(); },   // extended in Task 1.2
-  onChange() { renderAll(); if (document.getElementById('viewExercise').style.display !== 'none' && detailExerciseId) renderExerciseDetail(detailExerciseId); },
+  onChange() { renderAll(); if (document.getElementById('viewExercise').classList.contains('active') && detailExerciseId) renderExerciseDetail(detailExerciseId); },
 };
 </script>
 <script type="module">
