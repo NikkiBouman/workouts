@@ -555,6 +555,18 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 </div>
 
 <!-- =========================================
+     VIEW: EXERCISE DETAIL
+     ========================================= -->
+<div id="viewExercise" class="view" style="display:none;">
+  <button class="btn btn-sm" onclick="showView('viewHome')">← Terug</button>
+  <div id="exDetailHeader"></div>
+  <div id="exDetailStats" class="row" style="gap:1rem;flex-wrap:wrap;margin:0.75rem 0;"></div>
+  <div id="exDetailChart"></div>
+  <h3 style="margin-top:1rem;">Recente sessies</h3>
+  <div id="exDetailSessions"></div>
+</div>
+
+<!-- =========================================
      VIEW: RUNNER
      ========================================= -->
 <div class="view" id="viewRunner" style="display:none;">
@@ -797,7 +809,7 @@ function renderExerciseList() {
     const imgHtml = ex.imageUrl
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
       : '';
-    return `<div class="exercise-card" onclick="openExerciseEditor('${ex.id}')">
+    return `<div class="exercise-card" onclick="openExerciseDetail('${ex.id}')">
       <div style="position:relative;">
         ${imgHtml}
         <div class="exercise-img" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>
@@ -806,6 +818,7 @@ function renderExerciseList() {
         <div class="exercise-card-name">${esc(ex.name)}</div>
         <div class="exercise-card-meta">${meta}</div>
       </div>
+      <button class="btn-icon" style="width:32px;height:32px;font-size:0.75rem;" onclick="event.stopPropagation();openExerciseEditor('${ex.id}')">✏️</button>
       ${ex.id !== 'ex_hardlopen' ? `<button class="btn-icon" style="width:32px;height:32px;font-size:0.75rem;" onclick="event.stopPropagation();deleteExercise('${ex.id}')">🗑</button>` : ''}
     </div>`;
   }).join('');
@@ -851,6 +864,53 @@ function renderHistory() {
     </div>`;
   }).join('');
 }
+
+/* =============================================
+   EXERCISE DETAIL VIEW
+   ============================================= */
+let detailExerciseId = null;
+function openExerciseDetail(id) { detailExerciseId = id; renderExerciseDetail(id); showView('viewExercise'); }
+
+function renderExerciseDetail(id) {
+  const ex = getExercise(id);
+  if (!ex) return;
+  const sessions = loadHistory();
+  const st = window.Progress.statsForExercise(sessions, id);
+
+  document.getElementById('exDetailHeader').innerHTML = `
+    <div class="row" style="gap:0.75rem;align-items:center;">
+      ${ex.imageUrl ? `<img src="${ex.imageUrl}" style="width:56px;height:56px;object-fit:cover;border-radius:var(--r-sm);">` : ''}
+      <div><div style="font-weight:700;font-size:1.1rem;">${esc(ex.name)}</div>
+      <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${ex.type}</div></div>
+    </div>`;
+
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  document.getElementById('exDetailStats').innerHTML = `
+    <div><div style="font-size:1.4rem;font-weight:700;">${st.count}</div><div style="font-size:0.7rem;color:var(--muted);">keer gedaan</div></div>
+    <div><div style="font-size:1.4rem;font-weight:700;">${st.prWeight || '—'}${st.prWeight ? ' kg' : ''}</div><div style="font-size:0.7rem;color:var(--muted);">PR</div></div>
+    <div><div style="font-size:1.4rem;font-weight:700;">${st.currentWeight || '—'}${st.currentWeight ? ' kg' : ''}</div><div style="font-size:0.7rem;color:var(--muted);">huidig</div></div>
+    <div><div style="font-size:0.9rem;font-weight:700;">${fmtDate(st.lastDate)}</div><div style="font-size:0.7rem;color:var(--muted);">laatst</div></div>`;
+
+  // Recent sessions for this exercise
+  const rows = sessions
+    .filter(s => (s.exercises || []).some(e => e.exerciseId === id))
+    .slice(0, 15)
+    .map(s => {
+      const e = s.exercises.find(x => x.exerciseId === id);
+      const setStr = (e.sets || []).map(x =>
+        x.duration != null ? `${x.duration}s` : `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`
+      ).join(', ');
+      return `<div style="padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
+        <span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${esc(setStr)}
+      </div>`;
+    }).join('');
+  document.getElementById('exDetailSessions').innerHTML = rows ||
+    `<div style="color:var(--muted);font-size:0.85rem;">Nog geen sessies gelogd.</div>`;
+
+  renderProgressChart(id);   // Task 3.3
+}
+
+function renderProgressChart() { /* implemented in Task 3.3 */ }
 
 /* =============================================
    EXERCISE EDITOR
@@ -2681,7 +2741,7 @@ window.APP = {
   defaults: DEFAULT_EXERCISES,
   defaultsVersion: DEFAULTS_VERSION,
   onReady() { renderAll(); },   // extended in Task 1.2
-  onChange() { renderAll(); },
+  onChange() { renderAll(); if (document.getElementById('viewExercise').style.display !== 'none' && detailExerciseId) renderExerciseDetail(detailExerciseId); },
 };
 </script>
 <script type="module">
