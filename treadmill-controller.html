@@ -463,6 +463,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       <div class="toggle-group" style="margin-bottom:0.75rem;">
         <button class="toggle-opt active" id="exTypeCardio" onclick="setExType('cardio')">🏃 Cardio</button>
         <button class="toggle-opt" id="exTypeStrength" onclick="setExType('strength')">💪 Kracht</button>
+        <button class="toggle-opt" id="exTypeStretch" onclick="setExType('stretch')">🧘 Stretch</button>
       </div>
 
       <div id="exCardioOptions" style="display:none;">
@@ -486,10 +487,12 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
           <button class="toggle-opt" id="exMeasureDur" onclick="setExMeasure('duration')">Seconden</button>
         </div>
 
-        <h4>Gewicht mogelijk?</h4>
-        <div class="toggle-group">
-          <button class="toggle-opt active" id="exWeightNo" onclick="setExWeighted(false)">Nee</button>
-          <button class="toggle-opt" id="exWeightYes" onclick="setExWeighted(true)">Ja (kg)</button>
+        <div id="exWeightRow">
+          <h4>Gewicht mogelijk?</h4>
+          <div class="toggle-group">
+            <button class="toggle-opt active" id="exWeightNo" onclick="setExWeighted(false)">Nee</button>
+            <button class="toggle-opt" id="exWeightYes" onclick="setExWeighted(true)">Ja (kg)</button>
+          </div>
         </div>
       </div>
     </div>
@@ -660,17 +663,108 @@ function loadWorkouts() {
 }
 function saveWorkoutsData(list) { localStorage.setItem(WORKOUTS_KEY, JSON.stringify(list)); }
 
+const SEEDED_KEY = 'treadmill_seeded_defaults';
+const DEFAULTS_VERSION_KEY = 'treadmill_defaults_version';
+// Bump when the category/measurement/image of a default exercise changes, so that
+// already-seeded defaults get re-synced to their new definition (see loadExercises).
+const DEFAULTS_VERSION = 2;
+
+// Default exercise library. Images live in ./images/ (relative paths).
+// type = 'cardio' | 'strength' | 'stretch' (wat je doet).
+// Uitvoering in de runner hangt af van bleConnectable: true => loopband-tijdlijn,
+// anders het set/timer-scherm. perSide = links/rechts apart;
+// measureBy = 'reps' | 'duration'; weighted = kg mogelijk.
+const DEFAULT_EXERCISES = [
+  // --- Cardio ---
+  { id:'ex_hardlopen', name:'Hardlopen', imageUrl:'', type:'cardio', perSide:false, measureBy:null, weighted:false, bleConnectable:true },
+  { id:'ex_cross_trainer', name:'Cross Trainer', imageUrl:'images/crosstrainer.gif', type:'cardio', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_cycling', name:'Cycling', imageUrl:'images/stationary_cycling.gif', type:'cardio', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_rope_jump', name:'Rope Jump', imageUrl:'images/rope-jump.gif', type:'cardio', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
+  // --- Kracht ---
+  { id:'ex_squat', name:'Squat', imageUrl:'images/squat.gif', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_deadlift', name:'Deadlift', imageUrl:'images/deadlift.gif', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_back_extension', name:'Back Extension', imageUrl:'images/back-extension.c63a09.gif', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_box_jump', name:'Box Jump', imageUrl:'images/box-jump.gif', type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_chinese_plank', name:'Chinese Plank', imageUrl:'images/chinese-plank.png', type:'strength', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_glute_ham_isometric', name:'Glute-Ham Isometric', imageUrl:'images/glute-ham-isometric.webp', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_nordic_hamstring_curl', name:'Nordic Hamstring Curl', imageUrl:'images/nordic_curls_1200x1200_crop_center.webp', type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_ball_hamstring_curl', name:'Ball Hamstring Curl', imageUrl:'images/oneleghamstringcurlexerciseballtrainerplusapp-ezgif.com-crop.gif', type:'strength', perSide:true, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_sliding_leg', name:'Sliding Leg', imageUrl:'images/sliding-leg.webp', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_split_squat', name:'Split Squat', imageUrl:'images/split-squat.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_bulgarian_split_squat', name:'Bulgarian Split Squat', imageUrl:'images/bulgarian-squat.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_lunges', name:'Lunges', imageUrl:'images/lunges.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_step_up', name:'Step Up', imageUrl:'images/step-up.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_one_leg_calf_raise', name:'One Leg Calf Raise', imageUrl:'images/Single-Leg-Standing-Calf-Raise.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_hamstring_curl', name:'Hamstring Curl', imageUrl:'images/single-leg-hamstring-curl.jpg', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_leg_extension', name:'Leg Extension', imageUrl:'images/single-leg-leg-extension.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_single_leg_press', name:'Single Leg Press', imageUrl:'images/SL_LEG_PRESS.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_single_leg_calf_press', name:'Single Leg Calf Press', imageUrl:'images/Single-Calf-Raise-on-Leg-Press-Machine.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  { id:'ex_single_leg_deadlift', name:'Single Leg Deadlift', imageUrl:'images/medicine-ball-single-leg-deadlift.gif', type:'strength', perSide:true, measureBy:'reps', weighted:true, bleConnectable:false },
+  // --- Stretch ---
+  { id:'ex_leg_up_hamstring_stretch', name:'Leg Up Hamstring Stretch', imageUrl:'images/leg-up-hamstring-stretch.gif', type:'stretch', perSide:true, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_lying_glute_stretch', name:'Lying Glute Stretch', imageUrl:'images/10561301-Lying-Glute-Stretch_Hips_360.gif', type:'stretch', perSide:true, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_kneeling_hip_flexor', name:'Kneeling Hip Flexor', imageUrl:'images/kneeling-lunge-stretch-muscles.gif', type:'stretch', perSide:true, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_seated_hamstring_stretch', name:'Seated Single Leg Hamstring Stretch', imageUrl:'images/single-leg-hamstring-stretch.png', type:'stretch', perSide:true, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_extended_leg_hip_bridge', name:'Extended Leg Hip Bridge', imageUrl:'images/single-leg-glute-bridge.gif', type:'stretch', perSide:true, measureBy:'reps', weighted:false, bleConnectable:false },
+  { id:'ex_quadriceps_lying_stretch', name:'Quadriceps Lying Stretch', imageUrl:'images/Kneeling-Quad-Stretch.gif', type:'stretch', perSide:true, measureBy:'duration', weighted:false, bleConnectable:false },
+];
+
+// Icon + meta-label per exercise, used across home list, picker, editor and preview.
+function exIcon(ex) {
+  return ex.type === 'cardio' ? '🏃' : ex.type === 'stretch' ? '🧘' : '💪';
+}
+function exMeta(ex) {
+  if (ex.type === 'cardio') return ex.bleConnectable ? '🏃 Cardio · loopband' : '🏃 Cardio · timer';
+  const cat = ex.type === 'stretch' ? '🧘 Stretch' : '💪 Kracht';
+  return `${cat}${ex.perSide ? ' · per zijde' : ''}${ex.weighted ? ' · gewicht' : ''}`;
+}
+// True when an exercise drives the treadmill timeline; everything else uses the set/timer screen.
+function usesTreadmill(ex) { return !!(ex && ex.bleConnectable); }
+
 function loadExercises() {
+  let list = [];
   try {
-    const list = JSON.parse(localStorage.getItem(EXERCISES_KEY));
-    if (list && list.length) return list;
+    const stored = JSON.parse(localStorage.getItem(EXERCISES_KEY));
+    if (Array.isArray(stored)) list = stored;
   } catch {}
-  // Default exercises
-  const defaults = [
-    { id:'ex_hardlopen', name:'Hardlopen', imageUrl:'', type:'cardio', perSide:false, measureBy:null, weighted:false, bleConnectable:true },
-  ];
-  localStorage.setItem(EXERCISES_KEY, JSON.stringify(defaults));
-  return defaults;
+
+  let changed = false;
+
+  // One-time re-sync: when DEFAULTS_VERSION bumps, bring already-seeded default
+  // exercises in line with their new definition (category, measurement, image).
+  // Only touches known default ids; a custom name the user set is preserved.
+  let dver = 0;
+  try { dver = parseInt(localStorage.getItem(DEFAULTS_VERSION_KEY), 10) || 0; } catch {}
+  if (dver < DEFAULTS_VERSION) {
+    const byId = new Map(DEFAULT_EXERCISES.map(d => [d.id, d]));
+    list = list.map(e => {
+      const def = byId.get(e.id);
+      return def ? { ...def, name: e.name || def.name } : e;
+    });
+    changed = true;
+  }
+
+  // Seed defaults once per id. We track which defaults have ever been seeded so
+  // that (a) existing users still get newly added defaults, and (b) a default the
+  // user deliberately deleted does not keep reappearing.
+  let seeded;
+  try { seeded = new Set(JSON.parse(localStorage.getItem(SEEDED_KEY)) || []); }
+  catch { seeded = new Set(); }
+
+  const existingIds = new Set(list.map(e => e.id));
+  for (const def of DEFAULT_EXERCISES) {
+    if (seeded.has(def.id)) continue;
+    if (!existingIds.has(def.id)) { list.push(def); }
+    seeded.add(def.id);
+    changed = true;
+  }
+
+  if (changed) {
+    localStorage.setItem(EXERCISES_KEY, JSON.stringify(list));
+    localStorage.setItem(SEEDED_KEY, JSON.stringify([...seeded]));
+    localStorage.setItem(DEFAULTS_VERSION_KEY, String(DEFAULTS_VERSION));
+  }
+  return list;
 }
 function saveExercises(list) { localStorage.setItem(EXERCISES_KEY, JSON.stringify(list)); }
 
@@ -744,14 +838,14 @@ function renderExerciseList() {
   const list = loadExercises();
   const el = document.getElementById('exerciseList');
   el.innerHTML = list.map(ex => {
-    const meta = ex.type === 'cardio' ? '🏃 Cardio' : `💪 Kracht${ex.perSide ? ' · per zijde' : ''}${ex.weighted ? ' · gewicht' : ''}`;
+    const meta = exMeta(ex);
     const imgHtml = ex.imageUrl
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
       : '';
     return `<div class="exercise-card" onclick="openExerciseEditor('${ex.id}')">
       <div style="position:relative;">
         ${imgHtml}
-        <div class="exercise-img" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>
+        <div class="exercise-img" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>
       </div>
       <div class="exercise-card-info">
         <div class="exercise-card-name">${esc(ex.name)}</div>
@@ -787,8 +881,8 @@ function renderHistory() {
     const timeStr = d.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' });
     const exList = h.exercises.map(e => {
       let detail = e.exerciseName;
-      if (e.type === 'strength') {
-        detail += ` ${e.sets || 0}×${e.reps || e.duration + 's'}`;
+      if (e.sets) {
+        detail += ` ${e.sets}×${e.reps || e.duration + 's'}`;
         if (e.weight > 0) detail += ` ${e.weight}kg`;
       }
       return detail;
@@ -834,10 +928,15 @@ function setExWeighted(v) { exState.weighted = v; syncExUI(); }
 function setExBle(v) { exState.bleConnectable = v; syncExUI(); }
 
 function syncExUI() {
-  document.getElementById('exTypeCardio').classList.toggle('active', exState.type === 'cardio');
+  const isCardio = exState.type === 'cardio';
+  const isSetBased = exState.type === 'strength' || exState.type === 'stretch';
+  document.getElementById('exTypeCardio').classList.toggle('active', isCardio);
   document.getElementById('exTypeStrength').classList.toggle('active', exState.type === 'strength');
-  document.getElementById('exCardioOptions').style.display = exState.type === 'cardio' ? '' : 'none';
-  document.getElementById('exStrengthOptions').style.display = exState.type === 'strength' ? '' : 'none';
+  document.getElementById('exTypeStretch').classList.toggle('active', exState.type === 'stretch');
+  document.getElementById('exCardioOptions').style.display = isCardio ? '' : 'none';
+  document.getElementById('exStrengthOptions').style.display = isSetBased ? '' : 'none';
+  // Gewicht alleen bij kracht (niet bij stretch).
+  document.getElementById('exWeightRow').style.display = exState.type === 'strength' ? '' : 'none';
   document.getElementById('exBleNo').classList.toggle('active', !exState.bleConnectable);
   document.getElementById('exBleYes').classList.toggle('active', exState.bleConnectable);
   document.getElementById('exSideNo').classList.toggle('active', !exState.perSide);
@@ -863,15 +962,17 @@ function saveExercise() {
   const name = document.getElementById('exName').value.trim();
   if (!name) { alert('Geef de oefening een naam'); return; }
   const list = loadExercises();
+  const isCardio = exState.type === 'cardio';
+  const isSetBased = exState.type === 'strength' || exState.type === 'stretch';
   const ex = {
     id: editingExId || 'ex_' + Date.now(),
     name,
     imageUrl: document.getElementById('exImageUrl').value.trim(),
     type: exState.type,
-    perSide: exState.type === 'strength' ? exState.perSide : false,
-    measureBy: exState.type === 'strength' ? exState.measureBy : null,
+    perSide: isSetBased ? exState.perSide : false,
+    measureBy: isSetBased ? exState.measureBy : (isCardio && !exState.bleConnectable ? 'duration' : null),
     weighted: exState.type === 'strength' ? exState.weighted : false,
-    bleConnectable: exState.type === 'cardio' ? exState.bleConnectable : false,
+    bleConnectable: isCardio ? exState.bleConnectable : false,
   };
   if (editingExId) {
     const idx = list.findIndex(e => e.id === editingExId);
@@ -942,12 +1043,12 @@ function showExercisePicker() {
   document.getElementById('exercisePickerList').innerHTML = list.map(ex => {
     const imgHtml = ex.imageUrl
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none'">`
-      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>`;
     return `<div class="exercise-card" onclick="addEntry('${ex.id}')">
       ${imgHtml}
       <div class="exercise-card-info">
         <div class="exercise-card-name">${esc(ex.name)}</div>
-        <div class="exercise-card-meta">${ex.type === 'cardio' ? '🏃 Cardio' : '💪 Kracht'}</div>
+        <div class="exercise-card-meta">${exMeta(ex)}</div>
       </div>
     </div>`;
   }).join('');
@@ -957,12 +1058,12 @@ function addEntry(exerciseId) {
   const ex = getExercise(exerciseId);
   if (!ex) return;
   const entry = { id: 'e_' + Date.now(), exerciseId };
-  if (ex.type === 'cardio') {
+  if (usesTreadmill(ex)) {
     entry.blocks = [{ type:'segment', mode:'time', duration:300, distance:0, speed:5, incline:0 }];
   } else {
-    entry.sets = 3;
+    entry.sets = ex.type === 'cardio' ? 1 : 3;
     entry.reps = ex.measureBy === 'reps' ? 10 : null;
-    entry.duration = ex.measureBy === 'duration' ? 30 : null;
+    entry.duration = ex.measureBy === 'duration' ? (ex.type === 'cardio' ? 300 : 30) : null;
     entry.weight = ex.weighted ? 0 : null;
   }
   editorEntries.push(entry);
@@ -990,10 +1091,10 @@ function renderEntries() {
     if (!ex) return '';
     const imgHtml = ex.imageUrl
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="">`
-      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>`;
 
     let bodyHtml;
-    if (ex.type === 'cardio') {
+    if (usesTreadmill(ex)) {
       bodyHtml = renderCardioEditor(entry, ei);
     } else {
       bodyHtml = renderStrengthEditor(entry, ei, ex);
@@ -1176,7 +1277,7 @@ function getCardioBlocks(workout) {
   const allBlocks = [];
   for (const entry of (w.entries || [])) {
     const ex = getExercise(entry.exerciseId);
-    if (ex?.type === 'cardio' && entry.blocks) allBlocks.push(...entry.blocks);
+    if (usesTreadmill(ex) && entry.blocks) allBlocks.push(...entry.blocks);
   }
   return allBlocks.length ? allBlocks : (w.blocks || []);
 }
@@ -1281,10 +1382,11 @@ function openPreview(id) {
   const maxIncline = hasCardio ? Math.max(...steps.map(s => s.incline)) : 0;
   const entries = w.entries || [];
   const strengthCount = entries.filter(e => getExercise(e.exerciseId)?.type === 'strength').length;
+  const stretchCount = entries.filter(e => getExercise(e.exerciseId)?.type === 'stretch').length;
 
   document.getElementById('previewName').textContent = w.name;
   document.getElementById('previewStats').innerHTML =
-    `<span>${entries.length} oefening${entries.length !== 1 ? 'en' : ''}</span>${hasCardio ? `<span>${fmtTime(totalSec)} cardio</span>` : ''}${strengthCount ? `<span>${strengthCount} kracht</span>` : ''}`;
+    `<span>${entries.length} oefening${entries.length !== 1 ? 'en' : ''}</span>${hasCardio ? `<span>${fmtTime(totalSec)} cardio</span>` : ''}${strengthCount ? `<span>${strengthCount} kracht</span>` : ''}${stretchCount ? `<span>${stretchCount} stretch</span>` : ''}`;
 
   // --- SVG Chart (only if cardio) ---
   const chartEl = document.getElementById('previewChart');
@@ -1344,10 +1446,10 @@ function openPreview(id) {
 
     const imgHtml = ex.imageUrl
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="">`
-      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${ex.type === 'cardio' ? '🏃' : '💪'}</div>`;
+      : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>`;
 
-    if (ex.type === 'cardio' && entry.blocks) {
-      // Cardio: show exercise header + block table
+    if (usesTreadmill(ex) && entry.blocks) {
+      // Treadmill: show exercise header + block table
       blocksHtml += `<div style="display:flex;align-items:center;gap:0.5rem;margin:0.75rem 0 0.35rem;font-weight:700;">${imgHtml} ${esc(ex.name)}</div>`;
       (entry.blocks || []).forEach(block => {
         if (block.type === 'segment') {
@@ -1453,18 +1555,18 @@ async function startCurrentEntry() {
   const ex = getExercise(entry.exerciseId);
   if (!ex) { runEntryIndex++; await startCurrentEntry(); return; }
 
-  // Empty cardio: skip
-  if (ex.type === 'cardio' && (!entry.blocks || !entry.blocks.length)) {
+  // Empty treadmill entry: skip
+  if (usesTreadmill(ex) && (!entry.blocks || !entry.blocks.length)) {
     runEntryIndex++;
     await startCurrentEntry();
     return;
   }
 
-  if (ex.type === 'cardio' && entry.blocks?.length) {
-    const needsBle = ex.bleConnectable;
-
+  // Treadmill entries drive the belt via the timeline; everything else (strength,
+  // stretch, non-BLE cardio like cross trainer/cycling) uses the set/timer screen.
+  if (usesTreadmill(ex) && entry.blocks?.length) {
     // If BLE needed but not connected: prompt to connect or skip (loop until resolved)
-    if (needsBle && !isBleConnected()) {
+    if (!isBleConnected()) {
       let resolved = false;
       while (!resolved) {
         const choice = await showEntryPrompt(
@@ -1481,15 +1583,13 @@ async function startCurrentEntry() {
       }
     }
 
-    // If BLE and connected: confirm before starting belt
-    if (needsBle && isBleConnected()) {
-      const choice = await showEntryPrompt(
-        '⚠️ Loopband start zo!',
-        `Stap op de loopband — ${ex.name}`,
-        [{ label: '▶ Start', value: 'start' }, { label: '⏭ Skip', value: 'skip' }]
-      );
-      if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
-    }
+    // Connected: confirm before starting belt
+    const choice = await showEntryPrompt(
+      '⚠️ Loopband start zo!',
+      `Stap op de loopband — ${ex.name}`,
+      [{ label: '▶ Start', value: 'start' }, { label: '⏭ Skip', value: 'skip' }]
+    );
+    if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
 
     await startCardioEntry(entry);
   } else {
