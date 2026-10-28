@@ -54,6 +54,7 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       if (isPerSide) (sideOf(set, i, true) === 0 ? leftVals : rightVals).push(v);
     });
     out.push({
+      id: s.id,
       date: s.date,
       perSide: isPerSide,
       leftVals, rightVals, allVals,

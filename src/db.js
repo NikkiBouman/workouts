@@ -94,3 +94,4 @@ export function deleteExercise(id) { removeLocal('exercises', id); return delete
 export function upsertWorkout(w)   { putLocal('workouts', w);  return setDoc(docRef('workouts', w.id), w); }
 export function deleteWorkout(id)  { removeLocal('workouts', id); return deleteDoc(docRef('workouts', id)); }
 export function addSession(s)      { putLocal('sessions', s); cache.sessions.sort((a,b)=>(b.date||'').localeCompare(a.date||'')); return setDoc(docRef('sessions', s.id), s); }
+export function deleteSession(id)  { removeLocal('sessions', id); return deleteDoc(docRef('sessions', id)); }

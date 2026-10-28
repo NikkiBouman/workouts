@@ -909,8 +909,9 @@ function renderExerciseDetail(id) {
       } else {
         detail = esc((e.sets || []).map(fmtSet).join(', '));
       }
-      return `<div style="padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
-        <span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
+        <span><span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}</span>
+        <button onclick="confirmDeleteLog('${s.id}')" title="Verwijder deze log" style="background:none;border:none;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 0.1rem;flex-shrink:0;">🗑</button>
       </div>`;
     }).join('');
   document.getElementById('exDetailSessions').innerHTML = rows ||
@@ -1044,8 +1045,21 @@ function showChartPoint(i) {
       `</div>`;
   }
 
+  const trash = p.id ? `<button onclick="confirmDeleteLog('${p.id}')" title="Verwijder deze log" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0 0.1rem;">🗑</button>` : '';
   el.style.cssText = 'margin-top:0.5rem;font-size:0.8rem;border:1px solid var(--border);background:var(--s1);border-radius:var(--r-sm);padding:0.5rem 0.65rem;';
-  el.innerHTML = `<div style="font-weight:700;color:var(--text);margin-bottom:0.15rem;">${dateStr} · ${timeStr}</div>${body}${cmp}`;
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.15rem;"><span style="font-weight:700;color:var(--text);">${dateStr} · ${timeStr}</span>${trash}</div>${body}${cmp}`;
+}
+
+function confirmDeleteLog(sessionId) {
+  const ex = getExercise(detailExerciseId);
+  const s = loadHistory().find(x => x.id === sessionId);
+  if (!s) return;
+  const dateStr = new Date(s.date).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (!confirm(`Deze log van "${ex?.name || 'oefening'}" (${dateStr}) verwijderen?`)) return;
+  const remaining = (s.exercises || []).filter(e => e.exerciseId !== detailExerciseId);
+  if (remaining.length) window.DB.addSession({ ...s, exercises: remaining });
+  else window.DB.deleteSession(sessionId);
+  renderExerciseDetail(detailExerciseId);
 }
 
 /* =============================================
