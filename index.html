@@ -869,7 +869,7 @@ function renderHistory() {
    EXERCISE DETAIL VIEW
    ============================================= */
 let detailExerciseId = null;
-function openExerciseDetail(id) { detailExerciseId = id; renderExerciseDetail(id); showView('viewExercise'); }
+function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; renderExerciseDetail(id); showView('viewExercise'); }
 
 function renderExerciseDetail(id) {
   const ex = getExercise(id);
@@ -922,6 +922,13 @@ function renderExerciseDetail(id) {
 const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
 let chartSeries = [];
 let chartMeta = {};
+let chartHidden = { left: false, right: false };
+
+function toggleChartSeries(side) {
+  if (side === 'left') chartHidden.left = !chartHidden.left;
+  else if (side === 'right') chartHidden.right = !chartHidden.right;
+  renderProgressChart(detailExerciseId);
+}
 
 function renderProgressChart(id) {
   const ex = getExercise(id);
@@ -932,25 +939,30 @@ function renderProgressChart(id) {
   const unit = metric === 'weight' ? ' kg' : metric === 'duration' ? ' s' : '';
 
   chartSeries = series;
-  chartMeta = { perSide: !!ex.perSide, unit, colLeft: CHART_COL.left, colRight: CHART_COL.right, colSingle: CHART_COL.single };
 
   if (series.length < 2) {
+    chartMeta = { perSide: !!ex.perSide, unit, colLeft: CHART_COL.left, colRight: CHART_COL.right };
     el.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0;">Minstens 2 sessies nodig voor een grafiek.</div>`;
     return;
   }
 
   const lines = ex.perSide
-    ? [{ key: 'avgLeft', color: CHART_COL.left, label: 'Links', dash: '', hollow: false },
-       { key: 'avgRight', color: CHART_COL.right, label: 'Rechts', dash: '5 3', hollow: true }]
-    : [{ key: 'avgAll', color: CHART_COL.single, label: 'Gemiddelde', dash: '', hollow: false }];
+    ? [{ key: 'avgLeft', side: 'left', color: CHART_COL.left, label: 'Links', dash: '', hollow: false, hidden: chartHidden.left },
+       { key: 'avgRight', side: 'right', color: CHART_COL.right, label: 'Rechts', dash: '5 3', hollow: true, hidden: chartHidden.right }]
+    : [{ key: 'avgAll', side: null, color: CHART_COL.single, label: 'Gemiddelde', dash: '', hollow: false, hidden: false }];
+  const visible = lines.filter(L => !L.hidden);
 
   const cc = chartColors();
   const cW = 380, cH = 160, padL = 34, padR = 10, padT = 12, padB = 24;
   const plotW = cW - padL - padR, plotH = cH - padT - padB;
-  const allVals = lines.flatMap(L => series.map(p => p[L.key]));
+  const valSource = visible.length ? visible : lines;
+  const allVals = valSource.flatMap(L => series.map(p => p[L.key]));
   const yMax = Math.max(1, Math.ceil(Math.max(...allVals) * 1.15));
   const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = v => padT + plotH - (v / yMax) * plotH;
+
+  chartMeta = { perSide: !!ex.perSide, unit, colLeft: CHART_COL.left, colRight: CHART_COL.right,
+    xs: series.map((_, i) => x(i)), plotTop: padT, plotBottom: padT + plotH };
 
   let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
   const ySteps = 4;
@@ -959,7 +971,9 @@ function renderProgressChart(id) {
     svg += `<line x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}" stroke="${cc.grid}" stroke-width="0.5"/>`;
     svg += `<text x="${padL - 4}" y="${yy + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val * 10) / 10}</text>`;
   }
-  lines.forEach(L => {
+  // Vertical selection indicator (shown when a point is tapped).
+  svg += `<line id="chartSelLine" x1="0" y1="0" x2="0" y2="0" stroke="${cc.label}" stroke-width="1" stroke-dasharray="3 3" style="display:none;"/>`;
+  visible.forEach(L => {
     const pts = series.map((p, i) => `${x(i)},${y(p[L.key])}`).join(' ');
     svg += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="2" stroke-dasharray="${L.dash}"/>`;
     series.forEach((p, i) => {
@@ -977,11 +991,9 @@ function renderProgressChart(id) {
   svg += `<text x="${padL + plotW}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${dLabel(series[series.length - 1].date)}</text>`;
   svg += '</svg>';
 
+  const legItem = L => `<span onclick="toggleChartSeries('${L.side}')" style="cursor:pointer;user-select:none;color:${L.color};font-weight:700;opacity:${L.hidden ? 0.4 : 1};text-decoration:${L.hidden ? 'line-through' : 'none'};">● ${L.label}</span>`;
   const legend = ex.perSide
-    ? `<div class="row" style="gap:1rem;margin-bottom:0.3rem;font-size:0.75rem;">
-         <span style="color:${CHART_COL.left};font-weight:700;">● Links</span>
-         <span style="color:${CHART_COL.right};font-weight:700;">● Rechts</span>
-       </div>` : '';
+    ? `<div class="row" style="gap:1rem;margin-bottom:0.3rem;font-size:0.75rem;">${lines.map(legItem).join('')}</div>` : '';
   el.innerHTML = legend + svg +
     `<div id="exChartDetail" style="margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">Tik op een punt voor datum, tijd en reps.</div>`;
 }
@@ -990,6 +1002,13 @@ function showChartPoint(i) {
   const p = chartSeries[i];
   const el = document.getElementById('exChartDetail');
   if (!p || !el) return;
+  const selLine = document.getElementById('chartSelLine');
+  if (selLine && chartMeta.xs) {
+    const xi = chartMeta.xs[i];
+    selLine.setAttribute('x1', xi); selLine.setAttribute('x2', xi);
+    selLine.setAttribute('y1', chartMeta.plotTop); selLine.setAttribute('y2', chartMeta.plotBottom);
+    selLine.style.display = '';
+  }
   const d = new Date(p.date);
   const dateStr = d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
   const timeStr = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
@@ -1002,6 +1021,7 @@ function showChartPoint(i) {
   } else {
     body = `<div>${fmt(p.allVals)}</div>`;
   }
+  el.style.cssText = 'margin-top:0.5rem;font-size:0.8rem;border:1px solid var(--border);background:var(--s1);border-radius:var(--r-sm);padding:0.5rem 0.65rem;';
   el.innerHTML = `<div style="font-weight:700;color:var(--text);margin-bottom:0.15rem;">${dateStr} · ${timeStr}</div>${body}`;
 }
 
