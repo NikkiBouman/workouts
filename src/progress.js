@@ -2,6 +2,7 @@
 
 export function metricForExercise(ex) {
   if (ex.weighted) return 'weight';
+  if (ex.type === 'cardio' && ex.bleConnectable) return 'speed';
   if (ex.measureBy === 'duration') return 'duration';
   if (ex.measureBy === 'reps') return 'reps';
   return 'duration';
@@ -22,6 +23,7 @@ export function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / 
 function setMetric(set, metricKey) {
   if (metricKey === 'weight') return set.weight || 0;
   if (metricKey === 'duration') return set.duration || 0;
+  if (metricKey === 'speed') return set.speed || 0;
   return set.reps || 0;
 }
 
@@ -53,13 +55,25 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       durAll.push(set.duration || 0);
       if (isPerSide) (sideOf(set, i, true) === 0 ? leftVals : rightVals).push(v);
     });
+    const durTotal = durAll.reduce((a, b) => a + b, 0);
+    // For speed (cardio), the session's overall value is the duration-weighted
+    // average speed (= total distance / total time), not a plain mean of segments.
+    // speedMax is the fastest segment; speedMaxDur is how long was spent at it.
+    let avgAllVal = avg(allVals);
+    let speedMax = 0, speedMaxDur = 0;
+    if (metricKey === 'speed') {
+      if (durTotal > 0) avgAllVal = sets.reduce((acc, st) => acc + (st.speed || 0) * (st.duration || 0), 0) / durTotal;
+      speedMax = allVals.length ? Math.max(...allVals) : 0;
+      speedMaxDur = sets.reduce((acc, st) => acc + ((st.speed || 0) === speedMax ? (st.duration || 0) : 0), 0);
+    }
     out.push({
       id: s.id,
       date: s.date,
       perSide: isPerSide,
       leftVals, rightVals, allVals,
-      avgLeft: avg(leftVals), avgRight: avg(rightVals), avgAll: avg(allVals),
-      repsAvg: avg(repsAll), weightAvg: avg(weightAll), durAvg: avg(durAll),
+      avgLeft: avg(leftVals), avgRight: avg(rightVals), avgAll: avgAllVal,
+      repsAvg: avg(repsAll), weightAvg: avg(weightAll), durAvg: avg(durAll), durTotal,
+      speedMax, speedMaxDur,
     });
   }
   return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));

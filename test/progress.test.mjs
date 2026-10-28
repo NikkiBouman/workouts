@@ -19,6 +19,22 @@ test('metricForExercise picks weight/duration/reps', () => {
   assert.equal(metricForExercise({ weighted: false, measureBy: 'duration' }), 'duration');
   assert.equal(metricForExercise({ weighted: false, measureBy: 'reps' }), 'reps');
   assert.equal(metricForExercise({ weighted: false, measureBy: null, type: 'cardio' }), 'duration');
+  assert.equal(metricForExercise({ weighted: false, type: 'cardio', bleConnectable: true }), 'speed');
+});
+
+test('seriesForExercise: speed metric averages set.speed, keeps durAvg', () => {
+  const cs = [
+    { date: '2026-03-01T08:00:00.000Z', exercises: [ { exerciseId: 'run', type: 'cardio', bleConnectable: true, sets: [ { speed: 10, duration: 1800 } ] } ] },
+    { date: '2026-03-03T08:00:00.000Z', exercises: [ { exerciseId: 'run', type: 'cardio', bleConnectable: true, sets: [ { speed: 11, duration: 1800 }, { speed: 13, duration: 600 } ] } ] },
+  ];
+  const s = seriesForExercise(cs, 'run', false, 'speed');
+  assert.equal(s.length, 2);
+  assert.equal(s[0].avgAll, 10);
+  // duration-weighted: (11*1800 + 13*600) / 2400 = 11.5
+  assert.equal(s[1].avgAll, 11.5);
+  assert.equal(s[1].durTotal, 2400); // 1800 + 600
+  assert.equal(s[1].speedMax, 13);
+  assert.equal(s[1].speedMaxDur, 600); // time spent at the fastest segment
 });
 
 test('seriesForExercise: non-per-side gives per-session average, sorted ascending', () => {

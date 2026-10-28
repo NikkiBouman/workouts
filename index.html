@@ -873,7 +873,7 @@ function renderHistory() {
    EXERCISE DETAIL VIEW
    ============================================= */
 let detailExerciseId = null;
-function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; const f = document.getElementById('manualAddForm'); if (f) { f.style.display = 'none'; f.innerHTML = ''; } renderExerciseDetail(id); showView('viewExercise'); }
+function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; cardioMode = 'avg'; const f = document.getElementById('manualAddForm'); if (f) { f.style.display = 'none'; f.innerHTML = ''; } renderExerciseDetail(id); showView('viewExercise'); }
 
 function renderExerciseDetail(id) {
   const ex = getExercise(id);
@@ -896,7 +896,15 @@ function renderExerciseDetail(id) {
     <div><div style="font-size:0.9rem;font-weight:700;">${fmtDate(st.lastDate)}</div><div style="font-size:0.7rem;color:var(--muted);">laatst</div></div>`;
 
   // Recent sessions for this exercise
-  const fmtSet = x => x.duration != null ? `${x.duration}s` : `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`;
+  const isCardio = ex.type === 'cardio';
+  const fmtSet = x => {
+    if (x.speed != null) {
+      const sp = speedUnit === 'pace' ? `${kmhToPace(x.speed)}/km` : `${String(x.speed).replace('.', ',')} km/h`;
+      return `${Math.round((x.duration || 0) / 60)} min · ${sp}`;
+    }
+    if (x.duration != null) return isCardio ? `${Math.round(x.duration / 60)} min` : `${x.duration}s`;
+    return `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`;
+  };
   const rows = sessions
     .filter(s => (s.exercises || []).some(e => e.exerciseId === id))
     .slice(0, 15)
@@ -928,6 +936,7 @@ const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
 let chartSeries = [];
 let chartMeta = {};
 let chartHidden = { left: false, right: false };
+let cardioMode = 'avg'; // 'avg' | 'max' (speed charts only)
 
 function toggleChartSeries(side) {
   if (side === 'left') chartHidden.left = !chartHidden.left;
@@ -935,13 +944,15 @@ function toggleChartSeries(side) {
   renderProgressChart(detailExerciseId);
 }
 
+function setCardioMode(m) { cardioMode = m; renderProgressChart(detailExerciseId); }
+
 function renderProgressChart(id) {
   const ex = getExercise(id);
   const el = document.getElementById('exDetailChart');
   if (!ex || !el) return;
   const metric = window.Progress.metricForExercise(ex);
   const series = window.Progress.seriesForExercise(loadHistory(), id, !!ex.perSide, metric);
-  const unit = metric === 'weight' ? ' kg' : metric === 'duration' ? ' s' : '';
+  const unit = metric === 'weight' ? ' kg' : metric === 'duration' ? ' s' : metric === 'speed' ? ' km/h' : '';
 
   chartSeries = series;
 
@@ -951,10 +962,11 @@ function renderProgressChart(id) {
     return;
   }
 
+  const singleKey = (metric === 'speed' && cardioMode === 'max') ? 'speedMax' : 'avgAll';
   const lines = ex.perSide
     ? [{ key: 'avgLeft', side: 'left', color: CHART_COL.left, label: 'Links', dash: '', hollow: false, hidden: chartHidden.left },
        { key: 'avgRight', side: 'right', color: CHART_COL.right, label: 'Rechts', dash: '5 3', hollow: true, hidden: chartHidden.right }]
-    : [{ key: 'avgAll', side: null, color: CHART_COL.single, label: 'Gemiddelde', dash: '', hollow: false, hidden: false }];
+    : [{ key: singleKey, side: null, color: CHART_COL.single, label: 'Gemiddelde', dash: '', hollow: false, hidden: false }];
   const visible = lines.filter(L => !L.hidden);
 
   const cc = chartColors();
@@ -966,7 +978,7 @@ function renderProgressChart(id) {
   const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = v => padT + plotH - (v / yMax) * plotH;
 
-  chartMeta = { perSide: !!ex.perSide, unit, metric, weighted: !!ex.weighted, colLeft: CHART_COL.left, colRight: CHART_COL.right,
+  chartMeta = { perSide: !!ex.perSide, unit, metric, weighted: !!ex.weighted, cardioMode, colLeft: CHART_COL.left, colRight: CHART_COL.right,
     xs: series.map((_, i) => x(i)), plotTop: padT, plotBottom: padT + plotH };
 
   let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
@@ -999,8 +1011,13 @@ function renderProgressChart(id) {
   const legItem = L => `<span onclick="toggleChartSeries('${L.side}')" style="cursor:pointer;user-select:none;color:${L.color};font-weight:700;opacity:${L.hidden ? 0.4 : 1};text-decoration:${L.hidden ? 'line-through' : 'none'};">● ${L.label}</span>`;
   const legend = ex.perSide
     ? `<div class="row" style="gap:1rem;margin-bottom:0.3rem;font-size:0.75rem;">${lines.map(legItem).join('')}</div>` : '';
-  el.innerHTML = legend + svg +
-    `<div id="exChartDetail" style="margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">Tik op een punt voor datum, tijd en reps.</div>`;
+  const cardioToggle = metric === 'speed'
+    ? `<div class="row" style="gap:0.5rem;margin-bottom:0.3rem;">
+         <button class="btn btn-sm ${cardioMode === 'avg' ? 'btn-cyan' : ''}" onclick="setCardioMode('avg')">Gemiddelde</button>
+         <button class="btn btn-sm ${cardioMode === 'max' ? 'btn-cyan' : ''}" onclick="setCardioMode('max')">Max</button>
+       </div>` : '';
+  el.innerHTML = cardioToggle + legend + svg +
+    `<div id="exChartDetail" style="margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">Tik op een punt voor meer info.</div>`;
 }
 
 function showChartPoint(i) {
@@ -1020,7 +1037,18 @@ function showChartPoint(i) {
   const u = chartMeta.unit;
   const fmt = arr => (arr && arr.length) ? arr.map(v => v + u).join(', ') : '–';
   let body;
-  if (p.perSide) {
+  if (chartMeta.metric === 'speed') {
+    if (chartMeta.cardioMode === 'max') {
+      const spd = p.speedMax || 0, durSec = p.speedMaxDur || 0;
+      body = `<div>Max pace <b>${kmhToPace(spd)}</b> /km &nbsp;·&nbsp; ${spd.toFixed(1).replace('.', ',')} km/h</div>
+              <div style="color:var(--muted);">${Math.round(durSec / 60)} min op die pace</div>`;
+    } else {
+      const spd = p.avgAll, durSec = p.durTotal || 0;
+      const distKm = spd * (durSec / 3600);
+      body = `<div>Gem. pace <b>${kmhToPace(spd)}</b> /km &nbsp;·&nbsp; ${spd.toFixed(1).replace('.', ',')} km/h</div>
+              <div style="color:var(--muted);">${Math.round(durSec / 60)} min &nbsp;·&nbsp; ${distKm.toFixed(2).replace('.', ',')} km</div>`;
+    }
+  } else if (p.perSide) {
     body = `<div><span style="color:${chartMeta.colLeft};font-weight:700;">● Links</span> ${fmt(p.leftVals)}</div>
             <div><span style="color:${chartMeta.colRight};font-weight:700;">● Rechts</span> ${fmt(p.rightVals)}</div>`;
   } else {
@@ -1040,9 +1068,10 @@ function showChartPoint(i) {
   addT(0, 'Eerste'); addT(i - 1, 'Vorige'); addT(i + 1, 'Volgende'); addT(n - 1, 'Recent');
   let cmp = '';
   if (targets.length) {
+    const cv = pt => (chartMeta.metric === 'speed' && chartMeta.cardioMode === 'max') ? pt.speedMax : pt.avgAll;
     const rowMain = r => chartMeta.weighted
       ? `gewicht ${badge(pct(p.weightAvg, r.weightAvg))} &nbsp; reps ${badge(pct(p.repsAvg, r.repsAvg))}`
-      : badge(pct(p.avgAll, r.avgAll));
+      : badge(pct(cv(p), cv(r)));
     cmp = `<div style="margin-top:0.45rem;border-top:1px solid var(--border);padding-top:0.35rem;">
       <div style="font-weight:700;color:var(--text);margin-bottom:0.2rem;">Vergelijking</div>` +
       targets.map(t => `<div style="display:flex;justify-content:space-between;gap:0.75rem;margin-top:0.1rem;"><span style="color:var(--muted);">${t.label}</span><span style="text-align:right;">${rowMain(chartSeries[t.idx])}</span></div>`).join('') +
@@ -1079,8 +1108,24 @@ function toggleManualAdd() {
   } else { f.style.display = 'none'; f.innerHTML = ''; }
 }
 
+function setManualSpeedUnit(u) {
+  speedUnit = u;
+  localStorage.setItem('treadmill_speed_unit', u);
+  renderManualRows();
+}
+
+function updateManualSpeed(i, val) {
+  if (!manualRows[i]) return;
+  manualRows[i].speed = speedUnit === 'pace' ? (paceToKmh(val) || 0) : (+val || 0);
+}
+
 // Columns for one set row, depending on the exercise.
 function manualColsFor(ex, isDur) {
+  if (ex.type === 'cardio') {
+    const cols = [{ key: 'durMin', kind: 'num', label: 'Duur (min)', w: 80 }];
+    if (ex.bleConnectable) cols.push({ key: 'speed', kind: 'speed', label: speedUnit === 'pace' ? 'min/km' : 'km/h', w: 72 });
+    return cols;
+  }
   const cols = [];
   if (ex.weighted && !isDur) cols.push({ key: 'weight', label: 'kg', step: '0.5', w: 64 });
   if (isDur) {
@@ -1093,18 +1138,34 @@ function manualColsFor(ex, isDur) {
 
 function buildManualAddForm() {
   const ex = getExercise(detailExerciseId);
-  const isDur = window.Progress.metricForExercise(ex) === 'duration';
   const d = new Date(), pad = n => String(n).padStart(2, '0');
   const nowLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.65rem;font-size:0.85rem;">
-    <label style="display:block;">Datum &amp; tijd<input type="datetime-local" id="maDate" value="${nowLocal}" style="width:100%;margin-top:0.15rem;"></label>
-    <div style="margin-top:0.55rem;font-size:0.72rem;color:var(--muted);">${isDur ? 'Duur per set' : 'Eén regel per set — gewicht kan per set verschillen'}</div>
-    <div id="maRows" style="margin-top:0.3rem;"></div>
-    <button class="btn btn-sm" onclick="addManualRow()" style="margin-top:0.2rem;">+ set</button>
-    <div class="row" style="gap:0.5rem;margin-top:0.6rem;">
+  const dateField = `<label style="display:block;">Datum &amp; tijd<input type="datetime-local" id="maDate" value="${nowLocal}" style="width:100%;margin-top:0.15rem;"></label>`;
+  const buttons = `<div class="row" style="gap:0.5rem;margin-top:0.6rem;">
       <button class="btn btn-sm btn-cyan" onclick="saveManualLog()">Opslaan</button>
       <button class="btn btn-sm" onclick="toggleManualAdd()">Annuleren</button>
-    </div>
+    </div>`;
+  let bodyFields;
+  if (ex.type === 'cardio') {
+    const unitToggle = ex.bleConnectable
+      ? `<div class="row" style="gap:0;margin-top:0.5rem;align-items:center;">
+           <span style="font-size:0.72rem;color:var(--muted);margin-right:0.4rem;">Pace-eenheid:</span>
+           <button type="button" class="toggle-opt ${speedUnit === 'kmh' ? 'active' : ''}" onclick="setManualSpeedUnit('kmh')">km/h</button>
+           <button type="button" class="toggle-opt ${speedUnit === 'pace' ? 'active' : ''}" onclick="setManualSpeedUnit('pace')">min/km</button>
+         </div>` : '';
+    bodyFields = `${unitToggle}
+      <div id="maRows" style="margin-top:0.4rem;"></div>
+      <button class="btn btn-sm" onclick="addManualRow()" style="margin-top:0.2rem;">+ blok</button>`;
+  } else {
+    const isDur = window.Progress.metricForExercise(ex) === 'duration';
+    bodyFields = `<div style="margin-top:0.55rem;font-size:0.72rem;color:var(--muted);">${isDur ? 'Duur per set' : 'Eén regel per set — gewicht kan per set verschillen'}</div>
+      <div id="maRows" style="margin-top:0.3rem;"></div>
+      <button class="btn btn-sm" onclick="addManualRow()" style="margin-top:0.2rem;">+ set</button>`;
+  }
+  return `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.65rem;font-size:0.85rem;">
+    ${dateField}
+    ${bodyFields}
+    ${buttons}
   </div>`;
 }
 
@@ -1120,9 +1181,14 @@ function renderManualRows() {
     <span style="margin-left:auto;width:28px;"></span>
   </div>`;
   const rows = manualRows.map((row, i) => {
-    const inputs = cols.map(col =>
-      `<input type="number" inputmode="decimal" step="${col.step || '1'}" min="0" placeholder="${col.label}" value="${row[col.key] ?? ''}" oninput="updateManualRow(${i},'${col.key}',this.value)" title="${col.label}" style="width:${col.w}px;">`
-    ).join('');
+    const inputs = cols.map(col => {
+      if (col.kind === 'speed') {
+        return speedUnit === 'pace'
+          ? `<input type="text" placeholder="5:30" value="${row.speed > 0 ? kmhToPace(row.speed) : ''}" onchange="updateManualSpeed(${i},this.value)" title="min/km" style="width:${col.w}px;">`
+          : `<input type="number" min="0" step="0.1" placeholder="10.5" value="${row.speed > 0 ? row.speed : ''}" onchange="updateManualSpeed(${i},this.value)" title="km/h" style="width:${col.w}px;">`;
+      }
+      return `<input type="number" inputmode="decimal" step="${col.step || '1'}" min="0" placeholder="${col.label}" value="${row[col.key] ?? ''}" oninput="updateManualRow(${i},'${col.key}',this.value)" title="${col.label}" style="width:${col.w}px;">`;
+    }).join('');
     return `<div class="row" style="gap:0.3rem;align-items:center;margin-bottom:0.25rem;">
       <span style="color:var(--muted);font-size:0.68rem;width:34px;flex-shrink:0;">Set ${i + 1}</span>
       ${inputs}
@@ -1139,27 +1205,35 @@ function removeManualRow(i) { manualRows.splice(i, 1); if (!manualRows.length) m
 function saveManualLog() {
   const ex = getExercise(detailExerciseId);
   if (!ex) return;
-  const isDur = window.Progress.metricForExercise(ex) === 'duration';
   const dt = document.getElementById('maDate').value;
   if (!dt) { alert('Kies datum en tijd'); return; }
   const date = new Date(dt).toISOString();
   const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-  const sets = [];
-  manualRows.forEach(row => {
-    const w = (ex.weighted && !isDur) ? (num(row.weight) || 0) : null;
-    if (isDur) {
-      const l = num(row.durL), r = num(row.durR), d2 = num(row.dur);
-      if (ex.perSide) { if (l != null) sets.push({ weight: null, reps: null, duration: l, side: 0 }); if (r != null) sets.push({ weight: null, reps: null, duration: r, side: 1 }); }
-      else if (d2 != null) sets.push({ weight: null, reps: null, duration: d2, side: null });
-    } else if (ex.perSide) {
-      const l = num(row.repsL), r = num(row.repsR);
-      if (l != null) sets.push({ weight: w, reps: l, duration: null, side: 0 });
-      if (r != null) sets.push({ weight: w, reps: r, duration: null, side: 1 });
-    } else {
-      const rp = num(row.reps);
-      if (rp != null) sets.push({ weight: w, reps: rp, duration: null, side: null });
-    }
-  });
+  let sets = [];
+  if (ex.type === 'cardio') {
+    manualRows.forEach(row => {
+      const mins = num(row.durMin);
+      if (mins == null || mins <= 0) return;
+      sets.push({ weight: null, reps: null, duration: Math.round(mins * 60), speed: (ex.bleConnectable && row.speed > 0) ? row.speed : null, side: null });
+    });
+  } else {
+    const isDur = window.Progress.metricForExercise(ex) === 'duration';
+    manualRows.forEach(row => {
+      const w = (ex.weighted && !isDur) ? (num(row.weight) || 0) : null;
+      if (isDur) {
+        const l = num(row.durL), r = num(row.durR), d2 = num(row.dur);
+        if (ex.perSide) { if (l != null) sets.push({ weight: null, reps: null, duration: l, side: 0 }); if (r != null) sets.push({ weight: null, reps: null, duration: r, side: 1 }); }
+        else if (d2 != null) sets.push({ weight: null, reps: null, duration: d2, side: null });
+      } else if (ex.perSide) {
+        const l = num(row.repsL), r = num(row.repsR);
+        if (l != null) sets.push({ weight: w, reps: l, duration: null, side: 0 });
+        if (r != null) sets.push({ weight: w, reps: r, duration: null, side: 1 });
+      } else {
+        const rp = num(row.reps);
+        if (rp != null) sets.push({ weight: w, reps: rp, duration: null, side: null });
+      }
+    });
+  }
   if (!sets.length) { alert('Vul minstens één set in'); return; }
   window.DB.addSession({
     id: crypto.randomUUID(),
