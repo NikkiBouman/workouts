@@ -558,7 +558,6 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
      VIEW: EXERCISE DETAIL
      ========================================= -->
 <div id="viewExercise" class="view">
-  <button class="btn btn-sm" onclick="showView('viewHome')">← Terug</button>
   <div id="exDetailHeader"></div>
   <div id="exDetailStats" class="row" style="gap:1rem;flex-wrap:wrap;margin:0.75rem 0;"></div>
   <div id="exDetailChart"></div>
@@ -753,11 +752,21 @@ function migrateWorkout(w) {
 /* =============================================
    VIEW MANAGEMENT
    ============================================= */
-function showView(id) {
+function showView(id, fromPop) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (id === 'viewHome') { renderWorkoutList(); renderExerciseList(); renderHistory(); applySectionStates(); }
+  // Browser / phone back button support via the History API.
+  if (!fromPop) {
+    if (id === 'viewHome') history.replaceState({ view: 'viewHome' }, '');
+    else history.pushState({ view: id }, '');
+  }
 }
+
+history.replaceState({ view: 'viewHome' }, '');
+window.addEventListener('popstate', (e) => {
+  showView((e.state && e.state.view) || 'viewHome', true);
+});
 
 const SECTIONS = { workouts: 'workoutList', exercises: 'exerciseList', history: 'historyList' };
 
