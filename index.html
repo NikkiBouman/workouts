@@ -403,12 +403,12 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
      ========================================= -->
 <div class="view active" id="viewHome">
   <div class="logo">
-    <div style="display:flex;justify-content:flex-end;margin-bottom:-1rem;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:-1rem;">
+      <button id="authSignOutBtn" title="Uitloggen" style="display:none;background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1rem;cursor:pointer;align-items:center;justify-content:center;">⎋</button>
       <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
     </div>
     <div class="logo-title">Workout<span>Ctrl</span></div>
     <div class="logo-sub">Treadmill &amp; Strength Workout Controller</div>
-    <button class="btn-icon" id="authSignOutBtn" title="Uitloggen" style="display:none;">⎋</button>
   </div>
 
   <div id="syncStatus" style="display:none;font-size:0.65rem;font-family:var(--mono);color:var(--amber);text-align:center;padding:0.2rem;">offline — wijzigingen worden later gesynct</div>
@@ -910,32 +910,35 @@ function renderExerciseDetail(id) {
   renderProgressChart(id);   // Task 3.3
 }
 
-let chartMode = 'weight'; // 'weight' | 'volume' (only meaningful when metric === 'weight')
+const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
+let chartSeries = [];
+let chartMeta = {};
 
 function renderProgressChart(id) {
   const ex = getExercise(id);
   const el = document.getElementById('exDetailChart');
   if (!ex || !el) return;
-  const series = window.Progress.seriesForExercise(loadHistory(), id);
   const metric = window.Progress.metricForExercise(ex);
+  const series = window.Progress.seriesForExercise(loadHistory(), id, !!ex.perSide, metric);
+  const unit = metric === 'weight' ? ' kg' : metric === 'duration' ? ' s' : '';
+
+  chartSeries = series;
+  chartMeta = { perSide: !!ex.perSide, unit, colLeft: CHART_COL.left, colRight: CHART_COL.right, colSingle: CHART_COL.single };
 
   if (series.length < 2) {
     el.innerHTML = `<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem 0;">Minstens 2 sessies nodig voor een grafiek.</div>`;
     return;
   }
 
-  const pick = (p) => {
-    if (metric === 'weight') return chartMode === 'volume' ? p.volume : p.topWeight;
-    if (metric === 'duration') return p.maxDuration;
-    return p.maxReps;
-  };
-  const unit = metric === 'weight' ? (chartMode === 'volume' ? '' : 'kg') : (metric === 'duration' ? 's' : 'reps');
+  const lines = ex.perSide
+    ? [{ key: 'avgLeft', color: CHART_COL.left, label: 'Links' }, { key: 'avgRight', color: CHART_COL.right, label: 'Rechts' }]
+    : [{ key: 'avgAll', color: CHART_COL.single, label: 'Gemiddelde' }];
 
   const cc = chartColors();
   const cW = 380, cH = 160, padL = 34, padR = 10, padT = 12, padB = 24;
   const plotW = cW - padL - padR, plotH = cH - padT - padB;
-  const vals = series.map(pick);
-  const yMax = Math.max(1, Math.ceil(Math.max(...vals) * 1.1));
+  const allVals = lines.flatMap(L => series.map(p => p[L.key]));
+  const yMax = Math.max(1, Math.ceil(Math.max(...allVals) * 1.15));
   const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = v => padT + plotH - (v / yMax) * plotH;
 
@@ -944,29 +947,49 @@ function renderProgressChart(id) {
   for (let i = 0; i <= ySteps; i++) {
     const val = (yMax / ySteps) * i, yy = y(val);
     svg += `<line x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}" stroke="${cc.grid}" stroke-width="0.5"/>`;
-    svg += `<text x="${padL - 4}" y="${yy + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+    svg += `<text x="${padL - 4}" y="${yy + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val * 10) / 10}</text>`;
   }
-  const line = series.map((p, i) => `${x(i)},${y(pick(p))}`).join(' ');
-  svg += `<polyline points="${line}" fill="none" stroke="var(--cyan)" stroke-width="2"/>`;
-  series.forEach((p, i) => {
-    const v = pick(p);
-    svg += `<circle cx="${x(i)}" cy="${y(v)}" r="3" fill="var(--cyan)"><title>${new Date(p.date).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}: ${v}${unit}</title></circle>`;
+  lines.forEach(L => {
+    const pts = series.map((p, i) => `${x(i)},${y(p[L.key])}`).join(' ');
+    svg += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="2"/>`;
+    series.forEach((p, i) => { svg += `<circle cx="${x(i)}" cy="${y(p[L.key])}" r="3.5" fill="${L.color}"/>`; });
   });
-  // x labels: first and last date
-  const dLabel = d => new Date(d).toLocaleDateString('nl-NL', { day:'numeric', month:'short' });
+  // Transparent full-height hit areas per session for tap-to-inspect.
+  series.forEach((p, i) => {
+    svg += `<rect x="${x(i) - 14}" y="${padT}" width="28" height="${plotH}" fill="transparent" style="cursor:pointer;" onclick="showChartPoint(${i})"/>`;
+  });
+  const dLabel = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   svg += `<text x="${padL}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)">${dLabel(series[0].date)}</text>`;
-  svg += `<text x="${padL + plotW}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${dLabel(series[series.length-1].date)}</text>`;
+  svg += `<text x="${padL + plotW}" y="${cH - 6}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${dLabel(series[series.length - 1].date)}</text>`;
   svg += '</svg>';
 
-  const toggle = metric === 'weight'
-    ? `<div class="row" style="gap:0.5rem;margin-bottom:0.3rem;">
-         <button class="btn btn-sm ${chartMode==='weight'?'btn-cyan':''}" onclick="setChartMode('weight')">Gewicht</button>
-         <button class="btn btn-sm ${chartMode==='volume'?'btn-cyan':''}" onclick="setChartMode('volume')">Volume</button>
+  const legend = ex.perSide
+    ? `<div class="row" style="gap:1rem;margin-bottom:0.3rem;font-size:0.75rem;">
+         <span style="color:${CHART_COL.left};font-weight:700;">● Links</span>
+         <span style="color:${CHART_COL.right};font-weight:700;">● Rechts</span>
        </div>` : '';
-  el.innerHTML = toggle + svg;
+  el.innerHTML = legend + svg +
+    `<div id="exChartDetail" style="margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">Tik op een punt voor datum, tijd en reps.</div>`;
 }
 
-function setChartMode(m) { chartMode = m; renderProgressChart(detailExerciseId); }
+function showChartPoint(i) {
+  const p = chartSeries[i];
+  const el = document.getElementById('exChartDetail');
+  if (!p || !el) return;
+  const d = new Date(p.date);
+  const dateStr = d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
+  const timeStr = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
+  const u = chartMeta.unit;
+  const fmt = arr => (arr && arr.length) ? arr.map(v => v + u).join(', ') : '–';
+  let body;
+  if (p.perSide) {
+    body = `<div><span style="color:${chartMeta.colLeft};font-weight:700;">● Links</span> ${fmt(p.leftVals)}</div>
+            <div><span style="color:${chartMeta.colRight};font-weight:700;">● Rechts</span> ${fmt(p.rightVals)}</div>`;
+  } else {
+    body = `<div>${fmt(p.allVals)}</div>`;
+  }
+  el.innerHTML = `<div style="font-weight:700;color:var(--text);margin-bottom:0.15rem;">${dateStr} · ${timeStr}</div>${body}`;
+}
 
 /* =============================================
    EXERCISE EDITOR
@@ -1436,6 +1459,16 @@ function previewTableRow(seg) {
   </tr>`;
 }
 
+function toggleWorkoutLog() {
+  const t = document.getElementById('logToggle');
+  if (!t) return;
+  const next = t.dataset.on !== '1';
+  t.dataset.on = next ? '1' : '0';
+  const c = document.getElementById('logToggleCircle');
+  c.textContent = next ? '✓' : '✗';
+  c.style.background = next ? 'var(--green)' : 'var(--red)';
+}
+
 function openPreview(id) {
   previewWorkoutId = id;
   const raw = loadWorkouts().find(w => w.id === id);
@@ -1554,21 +1587,11 @@ function openPreview(id) {
   // --- Logging controls ---
   const logCtl = document.getElementById('previewLogControls');
   logCtl.innerHTML = `
-    <label style="display:flex;align-items:center;gap:0.5rem;font-weight:700;">
-      <input type="checkbox" id="logMaster" checked> Workout loggen
-    </label>
-    <div id="logPerExercise" style="margin-top:0.4rem;display:flex;flex-direction:column;gap:0.25rem;">
-      ${entries.map(e => {
-        const ex = getExercise(e.exerciseId);
-        return `<label style="display:flex;align-items:center;gap:0.5rem;font-size:0.8rem;color:var(--muted);">
-          <input type="checkbox" class="logEx" data-id="${e.exerciseId}" checked> ${esc(ex?.name || '?')}
-        </label>`;
-      }).join('')}
+    <div id="logToggle" data-on="1" onclick="toggleWorkoutLog()"
+      style="display:inline-flex;align-items:center;gap:0.6rem;cursor:pointer;user-select:none;white-space:nowrap;">
+      <span id="logToggleCircle" style="width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.95rem;font-weight:800;background:var(--green);color:#fff;flex-shrink:0;">✓</span>
+      <span style="font-weight:700;">Workout loggen</span>
     </div>`;
-  document.getElementById('logMaster').addEventListener('change', (ev) => {
-    document.getElementById('logPerExercise').style.opacity = ev.target.checked ? '1' : '0.4';
-    document.querySelectorAll('.logEx').forEach(c => c.disabled = !ev.target.checked);
-  });
 
   showView('viewPreview');
 }
@@ -1621,10 +1644,9 @@ async function startRunner() {
   runEntryIndex = 0;
   window.runLog = {};
   window.logPlan = {
-    master: document.getElementById('logMaster')?.checked ?? true,
+    master: document.getElementById('logToggle')?.dataset.on !== '0',
     perExercise: {},
   };
-  document.querySelectorAll('.logEx').forEach(c => { window.logPlan.perExercise[c.dataset.id] = c.checked; });
   runTotalElapsed = 0;
   runCalcDistance = 0;
   runPaused = false;
@@ -1885,11 +1907,12 @@ function strNextSet() {
     weight: wEl ? (+wEl.value || 0) : (ex.weighted ? (entry.weight || 0) : null),
     reps: ex.measureBy === 'reps' ? (repsEl ? (+repsEl.value || 0) : (entry.reps || 0)) : null,
     duration: ex.measureBy === 'duration' ? (entry.duration || 0) : null,
+    side: ex.perSide ? strSideIndex : null,
   };
   if (!window.runLog[entry.exerciseId]) {
     window.runLog[entry.exerciseId] = {
       exerciseId: entry.exerciseId, name: ex.name, type: ex.type,
-      measureBy: ex.measureBy || null, weighted: !!ex.weighted, sets: [],
+      measureBy: ex.measureBy || null, weighted: !!ex.weighted, perSide: !!ex.perSide, sets: [],
     };
   }
   window.runLog[entry.exerciseId].sets.push(set);
@@ -2820,7 +2843,7 @@ window.APP = {
   DB.onChange(() => window.APP.onChange());
 
   DB.onAuthChange(async (user) => {
-    signOutBtn.style.display = user ? '' : 'none';
+    signOutBtn.style.display = user ? 'flex' : 'none';
     if (!user) { DB.stop?.(); gate.style.display = 'flex'; return; }
     gate.style.display = 'none';
     await DB.start(user, window.APP.defaults, window.APP.defaultsVersion);
