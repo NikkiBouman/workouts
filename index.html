@@ -2070,6 +2070,14 @@ function startStrengthEntry(entry, ex) {
   updateStrengthUI(entry, ex);
 }
 
+function bumpCap(id, delta) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const step = id === 'capWeight' ? 0.5 : 1;
+  const v = (parseFloat(el.value) || 0) + delta * step;
+  el.value = Math.max(0, Math.round(v * 10) / 10);
+}
+
 function updateStrengthUI(entry, ex) {
   if (!entry) entry = runEntries[runEntryIndex];
   if (!ex) ex = getExercise(entry?.exerciseId);
@@ -2083,7 +2091,7 @@ function updateStrengthUI(entry, ex) {
   document.getElementById('strSetLabel').textContent = `Set ${setNum}/${totalSets * sides}${sideLabel}`;
 
   if (ex.measureBy === 'reps') {
-    document.getElementById('strDetail').textContent = `${entry.reps || 0}× herhalingen`;
+    document.getElementById('strDetail').textContent = `Doel: ${entry.reps || 0} reps`;
   } else {
     document.getElementById('strDetail').textContent = `${entry.duration || 0} seconden`;
     strTimerTotal = entry.duration || 0;
@@ -2093,9 +2101,21 @@ function updateStrengthUI(entry, ex) {
   const capWrap = document.getElementById('strCapture');
   if (ex.measureBy === 'reps') {
     capWrap.style.display = '';
+    const stepper = (id, val, w, extra) => `
+      <div style="display:flex;align-items:center;gap:0.3rem;">
+        <button type="button" class="btn-icon" style="width:34px;height:34px;font-size:1.2rem;" onclick="bumpCap('${id}',-1)">−</button>
+        <input type="number" id="${id}" value="${val}" ${extra} style="width:${w}px;text-align:center;">
+        <button type="button" class="btn-icon" style="width:34px;height:34px;font-size:1.2rem;" onclick="bumpCap('${id}',1)">+</button>
+      </div>`;
     capWrap.innerHTML = `
-      <label>Reps <input type="number" id="capReps" min="0" max="100" value="${entry.reps || 0}" style="width:64px;"></label>
-      ${ex.weighted ? `<label>kg <input type="number" id="capWeight" min="0" max="500" step="0.5" value="${entry.weight || 0}" style="width:72px;"></label>` : ''}
+      <div style="display:flex;flex-direction:column;align-items:center;gap:0.15rem;">
+        <span style="font-size:0.7rem;color:var(--muted);">Gedaan (reps)</span>
+        ${stepper('capReps', entry.reps || 0, 52, 'min="0" max="100"')}
+      </div>
+      ${ex.weighted ? `<div style="display:flex;flex-direction:column;align-items:center;gap:0.15rem;">
+        <span style="font-size:0.7rem;color:var(--muted);">kg</span>
+        ${stepper('capWeight', entry.weight || 0, 60, 'min="0" max="500" step="0.5"')}
+      </div>` : ''}
     `;
   } else {
     capWrap.innerHTML = '';
