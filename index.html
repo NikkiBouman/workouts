@@ -892,16 +892,25 @@ function renderExerciseDetail(id) {
     <div><div style="font-size:0.9rem;font-weight:700;">${fmtDate(st.lastDate)}</div><div style="font-size:0.7rem;color:var(--muted);">laatst</div></div>`;
 
   // Recent sessions for this exercise
+  const fmtSet = x => x.duration != null ? `${x.duration}s` : `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`;
   const rows = sessions
     .filter(s => (s.exercises || []).some(e => e.exerciseId === id))
     .slice(0, 15)
     .map(s => {
       const e = s.exercises.find(x => x.exerciseId === id);
-      const setStr = (e.sets || []).map(x =>
-        x.duration != null ? `${x.duration}s` : `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`
-      ).join(', ');
+      let detail;
+      if (ex.perSide) {
+        const left = [], right = [];
+        (e.sets || []).forEach((x, i) => {
+          const side = (x.side === 0 || x.side === 1) ? x.side : i % 2;
+          (side === 0 ? left : right).push(fmtSet(x));
+        });
+        detail = `<span style="color:${CHART_COL.left};font-weight:700;">L</span> ${esc(left.join(', ') || '–')} &nbsp; <span style="color:${CHART_COL.right};font-weight:700;">R</span> ${esc(right.join(', ') || '–')}`;
+      } else {
+        detail = esc((e.sets || []).map(fmtSet).join(', '));
+      }
       return `<div style="padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
-        <span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${esc(setStr)}
+        <span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}
       </div>`;
     }).join('');
   document.getElementById('exDetailSessions').innerHTML = rows ||
@@ -931,8 +940,9 @@ function renderProgressChart(id) {
   }
 
   const lines = ex.perSide
-    ? [{ key: 'avgLeft', color: CHART_COL.left, label: 'Links' }, { key: 'avgRight', color: CHART_COL.right, label: 'Rechts' }]
-    : [{ key: 'avgAll', color: CHART_COL.single, label: 'Gemiddelde' }];
+    ? [{ key: 'avgLeft', color: CHART_COL.left, label: 'Links', dash: '', hollow: false },
+       { key: 'avgRight', color: CHART_COL.right, label: 'Rechts', dash: '5 3', hollow: true }]
+    : [{ key: 'avgAll', color: CHART_COL.single, label: 'Gemiddelde', dash: '', hollow: false }];
 
   const cc = chartColors();
   const cW = 380, cH = 160, padL = 34, padR = 10, padT = 12, padB = 24;
@@ -951,8 +961,12 @@ function renderProgressChart(id) {
   }
   lines.forEach(L => {
     const pts = series.map((p, i) => `${x(i)},${y(p[L.key])}`).join(' ');
-    svg += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="2"/>`;
-    series.forEach((p, i) => { svg += `<circle cx="${x(i)}" cy="${y(p[L.key])}" r="3.5" fill="${L.color}"/>`; });
+    svg += `<polyline points="${pts}" fill="none" stroke="${L.color}" stroke-width="2" stroke-dasharray="${L.dash}"/>`;
+    series.forEach((p, i) => {
+      svg += L.hollow
+        ? `<circle cx="${x(i)}" cy="${y(p[L.key])}" r="3.5" fill="var(--bg)" stroke="${L.color}" stroke-width="1.5"/>`
+        : `<circle cx="${x(i)}" cy="${y(p[L.key])}" r="3.5" fill="${L.color}"/>`;
+    });
   });
   // Transparent full-height hit areas per session for tap-to-inspect.
   series.forEach((p, i) => {
