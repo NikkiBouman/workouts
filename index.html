@@ -562,6 +562,10 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
   <div id="exDetailHeader"></div>
   <div id="exDetailStats" class="row" style="gap:1rem;flex-wrap:wrap;margin:0.75rem 0;"></div>
   <div id="exDetailChart"></div>
+  <div style="margin-top:1rem;">
+    <button class="btn btn-sm btn-cyan" onclick="toggleManualAdd()">+ Sessie toevoegen</button>
+    <div id="manualAddForm" style="display:none;margin-top:0.5rem;"></div>
+  </div>
   <h3 style="margin-top:1rem;">Recente sessies</h3>
   <div id="exDetailSessions"></div>
 </div>
@@ -869,7 +873,7 @@ function renderHistory() {
    EXERCISE DETAIL VIEW
    ============================================= */
 let detailExerciseId = null;
-function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; renderExerciseDetail(id); showView('viewExercise'); }
+function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; const f = document.getElementById('manualAddForm'); if (f) { f.style.display = 'none'; f.innerHTML = ''; } renderExerciseDetail(id); showView('viewExercise'); }
 
 function renderExerciseDetail(id) {
   const ex = getExercise(id);
@@ -1059,6 +1063,118 @@ function confirmDeleteLog(sessionId) {
   const remaining = (s.exercises || []).filter(e => e.exerciseId !== detailExerciseId);
   if (remaining.length) window.DB.addSession({ ...s, exercises: remaining });
   else window.DB.deleteSession(sessionId);
+  renderExerciseDetail(detailExerciseId);
+}
+
+let manualRows = [];
+
+function toggleManualAdd() {
+  const f = document.getElementById('manualAddForm');
+  if (!f) return;
+  if (f.style.display === 'none') {
+    manualRows = [{}];
+    f.innerHTML = buildManualAddForm();
+    f.style.display = '';
+    renderManualRows();
+  } else { f.style.display = 'none'; f.innerHTML = ''; }
+}
+
+// Columns for one set row, depending on the exercise.
+function manualColsFor(ex, isDur) {
+  const cols = [];
+  if (ex.weighted && !isDur) cols.push({ key: 'weight', label: 'kg', step: '0.5', w: 64 });
+  if (isDur) {
+    if (ex.perSide) { cols.push({ key: 'durL', label: 'Duur L', w: 64 }); cols.push({ key: 'durR', label: 'Duur R', w: 64 }); }
+    else cols.push({ key: 'dur', label: 'Duur (s)', w: 80 });
+  } else if (ex.perSide) { cols.push({ key: 'repsL', label: 'Reps L', w: 64 }); cols.push({ key: 'repsR', label: 'Reps R', w: 64 }); }
+  else cols.push({ key: 'reps', label: 'Reps', w: 64 });
+  return cols;
+}
+
+function buildManualAddForm() {
+  const ex = getExercise(detailExerciseId);
+  const isDur = window.Progress.metricForExercise(ex) === 'duration';
+  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  const nowLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.65rem;font-size:0.85rem;">
+    <label style="display:block;">Datum &amp; tijd<input type="datetime-local" id="maDate" value="${nowLocal}" style="width:100%;margin-top:0.15rem;"></label>
+    <div style="margin-top:0.55rem;font-size:0.72rem;color:var(--muted);">${isDur ? 'Duur per set' : 'Eén regel per set — gewicht kan per set verschillen'}</div>
+    <div id="maRows" style="margin-top:0.3rem;"></div>
+    <button class="btn btn-sm" onclick="addManualRow()" style="margin-top:0.2rem;">+ set</button>
+    <div class="row" style="gap:0.5rem;margin-top:0.6rem;">
+      <button class="btn btn-sm btn-cyan" onclick="saveManualLog()">Opslaan</button>
+      <button class="btn btn-sm" onclick="toggleManualAdd()">Annuleren</button>
+    </div>
+  </div>`;
+}
+
+function renderManualRows() {
+  const ex = getExercise(detailExerciseId);
+  const isDur = window.Progress.metricForExercise(ex) === 'duration';
+  const cols = manualColsFor(ex, isDur);
+  const c = document.getElementById('maRows');
+  if (!c) return;
+  const header = `<div class="row" style="gap:0.3rem;align-items:center;margin-bottom:0.2rem;font-size:0.62rem;color:var(--muted);">
+    <span style="width:34px;flex-shrink:0;"></span>
+    ${cols.map(col => `<span style="width:${col.w}px;text-align:center;">${col.label}</span>`).join('')}
+    <span style="margin-left:auto;width:28px;"></span>
+  </div>`;
+  const rows = manualRows.map((row, i) => {
+    const inputs = cols.map(col =>
+      `<input type="number" inputmode="decimal" step="${col.step || '1'}" min="0" placeholder="${col.label}" value="${row[col.key] ?? ''}" oninput="updateManualRow(${i},'${col.key}',this.value)" title="${col.label}" style="width:${col.w}px;">`
+    ).join('');
+    return `<div class="row" style="gap:0.3rem;align-items:center;margin-bottom:0.25rem;">
+      <span style="color:var(--muted);font-size:0.68rem;width:34px;flex-shrink:0;">Set ${i + 1}</span>
+      ${inputs}
+      <button class="btn-icon" onclick="removeManualRow(${i})" title="Verwijder set" style="width:28px;height:28px;font-size:0.9rem;margin-left:auto;">×</button>
+    </div>`;
+  }).join('');
+  c.innerHTML = header + rows;
+}
+
+function updateManualRow(i, key, val) { if (manualRows[i]) manualRows[i][key] = val; }
+function addManualRow() { manualRows.push({ ...(manualRows[manualRows.length - 1] || {}) }); renderManualRows(); }
+function removeManualRow(i) { manualRows.splice(i, 1); if (!manualRows.length) manualRows.push({}); renderManualRows(); }
+
+function saveManualLog() {
+  const ex = getExercise(detailExerciseId);
+  if (!ex) return;
+  const isDur = window.Progress.metricForExercise(ex) === 'duration';
+  const dt = document.getElementById('maDate').value;
+  if (!dt) { alert('Kies datum en tijd'); return; }
+  const date = new Date(dt).toISOString();
+  const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+  const sets = [];
+  manualRows.forEach(row => {
+    const w = (ex.weighted && !isDur) ? (num(row.weight) || 0) : null;
+    if (isDur) {
+      const l = num(row.durL), r = num(row.durR), d2 = num(row.dur);
+      if (ex.perSide) { if (l != null) sets.push({ weight: null, reps: null, duration: l, side: 0 }); if (r != null) sets.push({ weight: null, reps: null, duration: r, side: 1 }); }
+      else if (d2 != null) sets.push({ weight: null, reps: null, duration: d2, side: null });
+    } else if (ex.perSide) {
+      const l = num(row.repsL), r = num(row.repsR);
+      if (l != null) sets.push({ weight: w, reps: l, duration: null, side: 0 });
+      if (r != null) sets.push({ weight: w, reps: r, duration: null, side: 1 });
+    } else {
+      const rp = num(row.reps);
+      if (rp != null) sets.push({ weight: w, reps: rp, duration: null, side: null });
+    }
+  });
+  if (!sets.length) { alert('Vul minstens één set in'); return; }
+  window.DB.addSession({
+    id: crypto.randomUUID(),
+    date,
+    workoutId: null,
+    workoutName: 'Handmatig',
+    totalSeconds: 0,
+    exercises: [{
+      exerciseId: ex.id, name: ex.name, type: ex.type,
+      measureBy: ex.measureBy || null, weighted: !!ex.weighted, perSide: !!ex.perSide,
+      sets,
+    }],
+  });
+  const f = document.getElementById('manualAddForm');
+  if (f) { f.style.display = 'none'; f.innerHTML = ''; }
   renderExerciseDetail(detailExerciseId);
 }
 
