@@ -961,7 +961,7 @@ function renderProgressChart(id) {
   const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = v => padT + plotH - (v / yMax) * plotH;
 
-  chartMeta = { perSide: !!ex.perSide, unit, colLeft: CHART_COL.left, colRight: CHART_COL.right,
+  chartMeta = { perSide: !!ex.perSide, unit, metric, weighted: !!ex.weighted, colLeft: CHART_COL.left, colRight: CHART_COL.right,
     xs: series.map((_, i) => x(i)), plotTop: padT, plotBottom: padT + plotH };
 
   let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
@@ -1021,8 +1021,31 @@ function showChartPoint(i) {
   } else {
     body = `<div>${fmt(p.allVals)}</div>`;
   }
+  // Comparisons vs other sessions (first / previous / next / most recent, deduped).
+  const n = chartSeries.length;
+  const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
+  const badge = v => {
+    if (v === null || !isFinite(v)) return '<span style="color:var(--muted);">–</span>';
+    const col = v > 0.05 ? 'var(--green)' : v < -0.05 ? 'var(--red)' : 'var(--muted)';
+    return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')}%</span>`;
+  };
+  const seen = new Set([i]);
+  const targets = [];
+  const addT = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); targets.push({ idx, label }); } };
+  addT(0, 'Eerste'); addT(i - 1, 'Vorige'); addT(i + 1, 'Volgende'); addT(n - 1, 'Recent');
+  let cmp = '';
+  if (targets.length) {
+    const rowMain = r => chartMeta.weighted
+      ? `gewicht ${badge(pct(p.weightAvg, r.weightAvg))} &nbsp; reps ${badge(pct(p.repsAvg, r.repsAvg))}`
+      : badge(pct(p.avgAll, r.avgAll));
+    cmp = `<div style="margin-top:0.45rem;border-top:1px solid var(--border);padding-top:0.35rem;">
+      <div style="font-weight:700;color:var(--text);margin-bottom:0.2rem;">Vergelijking</div>` +
+      targets.map(t => `<div style="display:flex;justify-content:space-between;gap:0.75rem;margin-top:0.1rem;"><span style="color:var(--muted);">${t.label}</span><span style="text-align:right;">${rowMain(chartSeries[t.idx])}</span></div>`).join('') +
+      `</div>`;
+  }
+
   el.style.cssText = 'margin-top:0.5rem;font-size:0.8rem;border:1px solid var(--border);background:var(--s1);border-radius:var(--r-sm);padding:0.5rem 0.65rem;';
-  el.innerHTML = `<div style="font-weight:700;color:var(--text);margin-bottom:0.15rem;">${dateStr} · ${timeStr}</div>${body}`;
+  el.innerHTML = `<div style="font-weight:700;color:var(--text);margin-bottom:0.15rem;">${dateStr} · ${timeStr}</div>${body}${cmp}`;
 }
 
 /* =============================================

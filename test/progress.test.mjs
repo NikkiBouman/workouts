@@ -28,6 +28,8 @@ test('seriesForExercise: non-per-side gives per-session average, sorted ascendin
   assert.equal(s[0].avgAll, 11);   // (10+12)/2
   assert.equal(s[1].avgAll, 14);   // single set 14
   assert.equal(s[0].perSide, false);
+  assert.equal(s[0].weightAvg, 11); // (10+12)/2
+  assert.equal(s[0].repsAvg, 9);    // (10+8)/2
 });
 
 test('seriesForExercise: per-side splits left/right by capture order and averages each', () => {

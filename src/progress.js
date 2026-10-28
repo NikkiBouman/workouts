@@ -44,9 +44,13 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
     const sets = e.sets || [];
     const isPerSide = perSide || !!e.perSide;
     const leftVals = [], rightVals = [], allVals = [];
+    const repsAll = [], weightAll = [], durAll = [];
     sets.forEach((set, i) => {
       const v = setMetric(set, metricKey);
       allVals.push(v);
+      repsAll.push(set.reps || 0);
+      weightAll.push(set.weight || 0);
+      durAll.push(set.duration || 0);
       if (isPerSide) (sideOf(set, i, true) === 0 ? leftVals : rightVals).push(v);
     });
     out.push({
@@ -54,6 +58,7 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       perSide: isPerSide,
       leftVals, rightVals, allVals,
       avgLeft: avg(leftVals), avgRight: avg(rightVals), avgAll: avg(allVals),
+      repsAvg: avg(repsAll), weightAvg: avg(weightAll), durAvg: avg(durAll),
     });
   }
   return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
