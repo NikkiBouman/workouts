@@ -649,6 +649,10 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
           <div id="strSetLabel" style="font-family:var(--mono);font-size:2rem;font-weight:800;line-height:1.2;"></div>
           <div id="strDetail" style="font-family:var(--mono);font-size:1rem;color:var(--muted);"></div>
           <div id="strWeight" style="font-family:var(--mono);font-size:0.9rem;color:var(--muted);"></div>
+          <div id="strHr" style="display:none;align-items:center;gap:0.3rem;">
+            <span id="strHrValue" style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:#e74c3c;">--</span>
+            <span style="font-size:0.65rem;color:var(--muted);">bpm</span>
+          </div>
           <div id="strCapture" class="row" style="gap:0.75rem;justify-content:center;margin-top:0.5rem;"></div>
           <div id="strTimerArea" style="display:none;margin:0.5rem 0;">
             <div id="strTimerDisplay" style="font-family:var(--mono);font-size:4rem;font-weight:800;color:var(--cyan);">0:00</div>
@@ -657,7 +661,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
             </div>
           </div>
           <div id="strActions" style="margin-top:1rem;">
-            <button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>
+            <button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>
             <button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>
           </div>
         </div>
@@ -868,14 +872,61 @@ function renderHistory() {
       if (top > 0) detail += ` ${top}kg`;
       return detail;
     }).join(' · ');
-    return `<div style="padding:0.5rem 0.65rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;">
+    const hrTxt = h.hrAvg ? ` · <span style="color:#e74c3c;" title="gem/max hartslag — tik voor curve">❤ ${h.hrAvg}${h.hrMax ? '/' + h.hrMax : ''} ${expandedHrSession === h.id ? '▾' : '▸'}</span>` : '';
+    return `<div ${h.hrAvg ? `onclick="toggleSessionHr('${h.id}')"` : ''} style="padding:0.5rem 0.65rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;${h.hrAvg ? 'cursor:pointer;' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:center;">
         <span style="font-weight:700;font-size:0.85rem;">${esc(h.workoutName)}</span>
         <span style="font-family:var(--mono);font-size:0.7rem;color:var(--muted);">${dateStr} ${timeStr}</span>
       </div>
-      <div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem;font-family:var(--mono);">${fmtTime(h.totalSeconds)} · ${esc(exList)}</div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:0.15rem;font-family:var(--mono);">${fmtTime(h.totalSeconds)} · ${esc(exList)}${hrTxt}</div>
+      ${expandedHrSession === h.id ? hrCurveSvg(h) : ''}
     </div>`;
   }).join('');
+}
+
+// Which session's HR curve is expanded in the history list (null = none).
+let expandedHrSession = null;
+function toggleSessionHr(id) {
+  expandedHrSession = expandedHrSession === id ? null : id;
+  renderHistory();
+}
+
+// Inline SVG line chart of a workout's heart rate over time. Each active segment is
+// its own polyline, so rest gaps (never sampled) show as gaps on the time axis.
+function hrCurveSvg(session) {
+  const segs = window.HR.buildHrCurve(session.exercises || [], session.hr || null);
+  const pts = segs.flatMap(s => s.points);
+  if (pts.length < 2) return `<div style="color:var(--muted);font-size:0.7rem;margin-top:0.4rem;">Te weinig hartslag-data voor een curve.</div>`;
+
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  const xMin = Math.min(...xs), xMax = Math.max(...xs);
+  const yMin = Math.max(0, Math.min(...ys) - 5), yMax = Math.max(...ys) + 5;
+  const cW = 380, cH = 120, padL = 26, padR = 8, padT = 8, padB = 16;
+  const plotW = cW - padL - padR, plotH = cH - padT - padB;
+  const X = t => padL + (xMax === xMin ? plotW / 2 : ((t - xMin) / (xMax - xMin)) * plotW);
+  const Y = v => padT + plotH - ((v - yMin) / (yMax - yMin || 1)) * plotH;
+  const cc = chartColors();
+
+  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;margin-top:0.4rem;">`;
+  const steps = 3;
+  for (let i = 0; i <= steps; i++) {
+    const val = yMin + ((yMax - yMin) / steps) * i, yy = Y(val);
+    svg += `<line x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 3}" y="${yy + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  segs.forEach(s => {
+    if (s.points.length === 1) {
+      const [t, b] = s.points[0];
+      svg += `<circle cx="${X(t).toFixed(1)}" cy="${Y(b).toFixed(1)}" r="2" fill="#e74c3c"/>`;
+    } else {
+      const poly = s.points.map(([t, b]) => `${X(t).toFixed(1)},${Y(b).toFixed(1)}`).join(' ');
+      svg += `<polyline points="${poly}" fill="none" stroke="#e74c3c" stroke-width="1.5"/>`;
+    }
+  });
+  svg += `<text x="${padL}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)">0</text>`;
+  svg += `<text x="${padL + plotW}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(xMax / 60)} min</text>`;
+  svg += '</svg>';
+  return svg;
 }
 
 /* =============================================
@@ -930,8 +981,9 @@ function renderExerciseDetail(id) {
       } else {
         detail = esc((e.sets || []).map(fmtSet).join(', '));
       }
+      const hrTxt = e.hrAvg ? ` <span style="color:#e74c3c;" title="gem/max hartslag">❤ ${e.hrAvg}${e.hrMax ? '/' + e.hrMax : ''}</span>` : '';
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
-        <span><span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}</span>
+        <span><span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}${hrTxt}</span>
         <button onclick="confirmDeleteLog('${s.id}')" title="Verwijder deze log" style="background:none;border:none;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 0.1rem;flex-shrink:0;">🗑</button>
       </div>`;
     }).join('');
@@ -2060,6 +2112,7 @@ function startStrengthEntry(entry, ex) {
   strSetIndex = 0;
   strSideIndex = 0;
   strTimerActive = false;
+  hrSegDiscard();
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
 
   const img = document.getElementById('strExImg');
@@ -2136,10 +2189,27 @@ function updateStrengthUI(entry, ex) {
     checkBtn.style.display = 'none';
   } else {
     timerArea.style.display = 'none';
-    // Rep-based: show check, hide play
-    playBtn.style.display = 'none';
-    checkBtn.style.display = '';
+    // Rep-based: with an HR monitor connected, start the set explicitly (▶) so rest
+    // isn't sampled; without one, keep the single-tap flow (just ✓).
+    if (hrConnected()) {
+      playBtn.style.display = '';
+      checkBtn.style.display = 'none';
+    } else {
+      playBtn.style.display = 'none';
+      checkBtn.style.display = '';
+    }
   }
+}
+
+// Dispatcher for the ▶ button. Duration exercises run the countdown timer; rep-based
+// exercises just open an HR sampling window for the active set.
+function strStartSet() {
+  const entry = runEntries[runEntryIndex];
+  const ex = getExercise(entry?.exerciseId);
+  if (ex && ex.measureBy === 'duration') { strStartTimer(); return; }
+  if (hrConnected()) hrSegStart(Math.round((Date.now() - runStartTime) / 1000));
+  document.getElementById('strPlayBtn').style.display = 'none';
+  document.getElementById('strCheckBtn').style.display = '';
 }
 
 function strStartTimer() {
@@ -2162,6 +2232,7 @@ function strStartTimer() {
       clearInterval(strCountdownInterval); strCountdownInterval = null;
       display.style.color = 'var(--cyan)';
       playBeep();
+      if (hrConnected()) hrSegStart(Math.round((Date.now() - runStartTime) / 1000));
       strTimerInterval = setInterval(() => {
         strTimerElapsed++;
         runTotalElapsed++;
@@ -2172,6 +2243,7 @@ function strStartTimer() {
         if (rem <= 0) {
           clearInterval(strTimerInterval); strTimerInterval = null;
           strTimerActive = false;
+          pendingSetHr = hrSegEnd();
           display.textContent = '✓';
           display.style.color = 'var(--green)';
           document.getElementById('strCheckBtn').style.display = '';
@@ -2191,6 +2263,11 @@ function strNextSet() {
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
 
+  // Close the HR window for this set: rep-based is still sampling (end it now);
+  // duration ended at the timer finish and parked its result in pendingSetHr.
+  const setHr = hrSeg ? hrSegEnd() : pendingSetHr;
+  pendingSetHr = null;
+
   const repsEl = document.getElementById('capReps');
   const wEl = document.getElementById('capWeight');
   const set = {
@@ -2199,6 +2276,7 @@ function strNextSet() {
     duration: ex.measureBy === 'duration' ? (entry.duration || 0) : null,
     side: ex.perSide ? strSideIndex : null,
   };
+  if (setHr) set.hr = setHr; // omit entirely when null — Firestore rejects undefined
   if (!window.runLog[entry.exerciseId]) {
     window.runLog[entry.exerciseId] = {
       exerciseId: entry.exerciseId, name: ex.name, type: ex.type,
@@ -2229,6 +2307,7 @@ async function strSkipExercise() {
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
+  hrSegDiscard();
   // Stop treadmill if active
   if (currentCardioUsesBle && isBleConnected()) {
     await sendFTMSStop();
@@ -2244,6 +2323,7 @@ async function finishWorkout() {
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
   currentCardioUsesBle = false;
+  hrSegDiscard();
 
   // Log to history
   const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
@@ -2252,13 +2332,21 @@ async function finishWorkout() {
     const exercises = Object.values(window.runLog || {})
       .filter(r => plan.perExercise[r.exerciseId] !== false && r.sets.length);
     if (exercises.length) {
-      window.DB.addSession({
+      // Derive per-exercise and whole-workout HR from the sampled sets.
+      for (const exLog of exercises) {
+        const agg = window.HR.combineHr((exLog.sets || []).map(s => s.hr));
+        if (agg) { exLog.hrAvg = agg.avg; exLog.hrMax = agg.max; }
+      }
+      const sessHr = window.HR.combineHr(exercises.flatMap(exLog => (exLog.sets || []).map(s => s.hr)));
+      const session = {
         id: crypto.randomUUID(),
         date: new Date().toISOString(),
         workoutId: raw.id, workoutName: raw.name,
         totalSeconds: Math.round((Date.now() - runStartTime) / 1000),
         exercises,
-      });
+      };
+      if (sessHr) { session.hrAvg = sessHr.avg; session.hrMax = sessHr.max; }
+      window.DB.addSession(session);
     }
   }
 
@@ -2357,6 +2445,7 @@ async function togglePause() {
   if (!runPaused) {
     // PAUSE
     runPaused = true;
+    hrSamplingPaused = true;
     if (runTimer) clearInterval(runTimer);
     runTimer = null;
     document.getElementById('runBtnPause').textContent = '▶ Hervat';
@@ -2383,6 +2472,7 @@ async function togglePause() {
     }
 
     runPaused = false;
+    hrSamplingPaused = false;
     document.getElementById('runBtnPause').disabled = false;
     document.getElementById('runBtnPause').textContent = '⏸ Pauze';
     runTimer = setInterval(runTick, 1000);
@@ -2396,6 +2486,7 @@ async function stopRunner() {
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   if (confirmWaitInterval) { clearInterval(confirmWaitInterval); confirmWaitInterval = null; }
   strTimerActive = false;
+  hrSegDiscard();
   const ok = currentCardioUsesBle && isBleConnected() ? await sendFTMSStop() : true;
   currentCardioUsesBle = false;
   if (!ok) {
@@ -2956,6 +3047,25 @@ const HR_MEASUREMENT = 0x2A37;
 let hrDevice = null, hrServer = null;
 let currentHR = 0;
 
+// HR sampling: an active "segment" collects [tRelSec, bpm] pairs while a set, timed
+// hold or run is actually happening. Rest is never sampled because no segment is open.
+let hrSeg = null;        // { startMs, lastPushMs, samples, startOffsetSec } | null
+let pendingSetHr = null; // hr of a segment that already ended, awaiting attach (duration sets)
+let hrSamplingPaused = false;
+
+function hrConnected() { return !!hrDevice?.gatt?.connected; }
+
+function hrSegStart(startOffsetSec = 0) {
+  hrSeg = { startMs: Date.now(), lastPushMs: 0, samples: [], startOffsetSec };
+}
+function hrSegEnd() {
+  if (!hrSeg) return null;
+  const hr = window.HR.makeSetHr(hrSeg.samples, hrSeg.startOffsetSec);
+  hrSeg = null;
+  return hr;
+}
+function hrSegDiscard() { hrSeg = null; pendingSetHr = null; }
+
 async function hrConnect() {
   if (!navigator.bluetooth) { alert('Web Bluetooth niet beschikbaar!'); return; }
   try {
@@ -2988,6 +3098,12 @@ function updateHrUI(connected) {
 
   const hrDisplay = document.getElementById('runHrDisplay');
   if (hrDisplay) hrDisplay.style.display = connected ? '' : 'none';
+
+  const strHr = document.getElementById('strHr');
+  if (strHr) strHr.style.display = connected ? 'flex' : 'none';
+
+  // Nothing to sample once the monitor is gone.
+  if (!connected && hrSeg) pendingSetHr = hrSegEnd();
 }
 
 function onHeartRate(event) {
@@ -2999,12 +3115,23 @@ function onHeartRate(event) {
   } else {
     currentHR = dv.getUint8(1);
   }
-  // Update runner display
+  // Update live displays (cardio runner + strength screen)
   const el = document.getElementById('runHrValue');
   if (el) el.textContent = currentHR;
+  const strEl = document.getElementById('strHrValue');
+  if (strEl) strEl.textContent = currentHR;
 
   // Update connection bar
   document.getElementById('hrLabel').textContent = `❤ ${currentHR} bpm`;
+
+  // Sample into the active segment, throttled to ~1 reading / 2s to keep storage tiny.
+  if (hrSeg && !hrSamplingPaused && currentHR > 0) {
+    const now = Date.now();
+    if (now - hrSeg.lastPushMs >= 2000) {
+      hrSeg.samples.push([Math.round((now - hrSeg.startMs) / 1000), currentHR]);
+      hrSeg.lastPushMs = now;
+    }
+  }
 }
 
 /* =============================================
@@ -3118,6 +3245,8 @@ window.APP = {
   window.DB = DB;
   import * as Progress from './src/progress.js';
   window.Progress = Progress;
+  import * as HR from './src/hr.js';
+  window.HR = HR;
 
   const gate = document.getElementById('authGate');
   const signInBtn = document.getElementById('authSignInBtn');
