@@ -1188,12 +1188,24 @@ function manualColsFor(ex, isDur) {
     return cols;
   }
   const cols = [];
-  if (ex.weighted && !isDur) cols.push({ key: 'weight', label: 'kg', step: '0.5', w: 64 });
   if (isDur) {
     if (ex.perSide) { cols.push({ key: 'durL', label: 'Duur L', w: 64 }); cols.push({ key: 'durR', label: 'Duur R', w: 64 }); }
     else cols.push({ key: 'dur', label: 'Duur (s)', w: 80 });
-  } else if (ex.perSide) { cols.push({ key: 'repsL', label: 'Reps L', w: 64 }); cols.push({ key: 'repsR', label: 'Reps R', w: 64 }); }
-  else cols.push({ key: 'reps', label: 'Reps', w: 64 });
+  } else if (ex.perSide) {
+    // Per-leg entry: weight and reps for each side independently.
+    if (ex.weighted) {
+      cols.push({ key: 'weightL', label: 'L kg', step: '0.5', w: 52 });
+      cols.push({ key: 'repsL', label: 'L reps', w: 52 });
+      cols.push({ key: 'weightR', label: 'R kg', step: '0.5', w: 52 });
+      cols.push({ key: 'repsR', label: 'R reps', w: 52 });
+    } else {
+      cols.push({ key: 'repsL', label: 'Reps L', w: 64 });
+      cols.push({ key: 'repsR', label: 'Reps R', w: 64 });
+    }
+  } else {
+    if (ex.weighted) cols.push({ key: 'weight', label: 'kg', step: '0.5', w: 64 });
+    cols.push({ key: 'reps', label: 'Reps', w: 64 });
+  }
   return cols;
 }
 
@@ -1287,8 +1299,10 @@ function saveManualLog() {
         else if (d2 != null) sets.push({ weight: null, reps: null, duration: d2, side: null });
       } else if (ex.perSide) {
         const l = num(row.repsL), r = num(row.repsR);
-        if (l != null) sets.push({ weight: w, reps: l, duration: null, side: 0 });
-        if (r != null) sets.push({ weight: w, reps: r, duration: null, side: 1 });
+        const wL = ex.weighted ? (num(row.weightL) || 0) : null;
+        const wR = ex.weighted ? (num(row.weightR) || 0) : null;
+        if (l != null) sets.push({ weight: wL, reps: l, duration: null, side: 0 });
+        if (r != null) sets.push({ weight: wR, reps: r, duration: null, side: 1 });
       } else {
         const rp = num(row.reps);
         if (rp != null) sets.push({ weight: w, reps: rp, duration: null, side: null });

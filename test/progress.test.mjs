@@ -76,6 +76,18 @@ test('seriesForExercise: explicit set.side overrides capture order', () => {
   assert.deepEqual(s[0].rightVals, [8]);   // side:1
 });
 
+test('seriesForExercise: per-side weight splits different L/R loads into separate series', () => {
+  const ps = [ { date: '2026-04-01T08:00:00.000Z', exercises: [
+    { exerciseId: 'sle', weighted: true, measureBy: 'reps', perSide: true,
+      sets: [ { weight: 15, reps: 10, side: 0 }, { weight: 12, reps: 8, side: 1 },
+              { weight: 15, reps: 10, side: 0 }, { weight: 12, reps: 8, side: 1 } ] } ] } ];
+  const s = seriesForExercise(ps, 'sle', true, 'weight');
+  assert.equal(s[0].avgLeft, 15);
+  assert.equal(s[0].avgRight, 12);
+  assert.deepEqual(s[0].leftVals, [15, 15]);
+  assert.deepEqual(s[0].rightVals, [12, 12]);
+});
+
 test('statsForExercise returns count, lastDate, PR and current', () => {
   const st = statsForExercise(sessions, 'a');
   assert.equal(st.count, 2);
