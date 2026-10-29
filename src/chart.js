@@ -1,0 +1,100 @@
+// Pure SVG builder for the min/avg/max progress chart. No DOM — importable by
+// node:test and reusable by both the app and the standalone demo page.
+//
+// Each session contributes a vertical slice with up to three points (min, avg, max)
+// per visible side. Between sessions: a line min→min, a line max→max with the area
+// between them lightly filled, and a solid avg→avg line.
+
+const dLabel = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+
+// series: output of seriesForExercise (each point has statAll/statLeft/statRight).
+// opts: { perSide, hidden:{left,right}, statHidden:{min,avg,max}, colors:{left,right,single,grid,label,bg}, unit, onPointClick }
+// Returns { svg, xs, plotTop, plotBottom, lo, hi } (xs/plotTop/plotBottom let the caller move the selection line).
+export function buildStatChart(series, opts) {
+  const { perSide = false, hidden = {}, statHidden = {}, colors, onPointClick = 'showChartPoint' } = opts;
+
+  const sides = perSide
+    ? [{ name: 'left', statKey: 'statLeft', color: colors.left, dash: '' },
+       { name: 'right', statKey: 'statRight', color: colors.right, dash: '4 3' }]
+    : [{ name: 'single', statKey: 'statAll', color: colors.single, dash: '' }];
+  const visSides = sides.filter(s => !hidden[s.name]);
+  const visStats = ['min', 'avg', 'max'].filter(k => !statHidden[k]);
+
+  const cW = 380, cH = 180, padL = 34, padR = 10, padT = 12, padB = 24;
+  const plotW = cW - padL - padR, plotH = cH - padT - padB;
+
+  const allVals = [];
+  visSides.forEach(s => series.forEach(p => {
+    const st = p[s.statKey];
+    if (st) visStats.forEach(k => allVals.push(st[k]));
+  }));
+
+  const geom = { svg: '', xs: series.map((_, i) => 0), plotTop: padT, plotBottom: padT + plotH, lo: 0, hi: 1 };
+  if (!allVals.length) return geom;
+
+  let lo = Math.min(...allVals), hi = Math.max(...allVals);
+  if (lo === hi) { lo -= 1; hi += 1; }
+  const span = hi - lo;
+  lo = Math.max(0, lo - span * 0.1);
+  hi = hi + span * 0.1;
+
+  const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+  const y = v => padT + plotH - ((v - lo) / (hi - lo)) * plotH;
+  const xs = series.map((_, i) => x(i));
+
+  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+
+  const ySteps = 4;
+  for (let i = 0; i <= ySteps; i++) {
+    const val = lo + ((hi - lo) / ySteps) * i, yy = y(val);
+    svg += `<line x1="${padL}" y1="${yy}" x2="${padL + plotW}" y2="${yy}" stroke="${colors.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 4}" y="${yy + 3}" fill="${colors.label}" font-size="7" font-family="monospace" text-anchor="end">${Math.round(val * 10) / 10}</text>`;
+  }
+
+  svg += `<line id="chartSelLine" x1="0" y1="0" x2="0" y2="0" stroke="${colors.label}" stroke-width="1" stroke-dasharray="3 3" style="display:none;"/>`;
+
+  const ptStr = (statKey, k) => series
+    .map((p, i) => { const st = p[statKey]; return st ? `${x(i).toFixed(1)},${y(st[k]).toFixed(1)}` : null; })
+    .filter(Boolean);
+
+  visSides.forEach(s => {
+    // Shaded band between min and max (only when both bounds are shown).
+    if (!statHidden.min && !statHidden.max) {
+      const top = ptStr(s.statKey, 'max');
+      const bot = ptStr(s.statKey, 'min').reverse();
+      if (top.length) svg += `<polygon points="${top.concat(bot).join(' ')}" fill="${s.color}" fill-opacity="0.12" stroke="none"/>`;
+    }
+    // Min / max boundary lines: thin, dashed, faded.
+    ['min', 'max'].forEach(k => {
+      if (statHidden[k]) return;
+      const pts = ptStr(s.statKey, k);
+      if (pts.length) svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="1" stroke-dasharray="3 2" opacity="0.55"/>`;
+    });
+    // Avg line: solid and prominent.
+    if (!statHidden.avg) {
+      const pts = ptStr(s.statKey, 'avg');
+      if (pts.length) svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
+    }
+    // Points for each visible stat (avg filled, min/max hollow).
+    visStats.forEach(k => series.forEach((p, i) => {
+      const st = p[s.statKey];
+      if (!st) return;
+      svg += k === 'avg'
+        ? `<circle cx="${x(i).toFixed(1)}" cy="${y(st.avg).toFixed(1)}" r="3.2" fill="${s.color}"/>`
+        : `<circle cx="${x(i).toFixed(1)}" cy="${y(st[k]).toFixed(1)}" r="2.2" fill="${colors.bg}" stroke="${s.color}" stroke-width="1.2"/>`;
+    }));
+  });
+
+  // Transparent full-height hit areas per session for tap-to-inspect.
+  series.forEach((p, i) => {
+    svg += `<rect x="${(x(i) - 14).toFixed(1)}" y="${padT}" width="28" height="${plotH}" fill="transparent" style="cursor:pointer;" onclick="${onPointClick}(${i})"/>`;
+  });
+
+  if (series.length) {
+    svg += `<text x="${padL}" y="${cH - 6}" fill="${colors.label}" font-size="7" font-family="monospace">${dLabel(series[0].date)}</text>`;
+    if (series.length > 1) svg += `<text x="${padL + plotW}" y="${cH - 6}" fill="${colors.label}" font-size="7" font-family="monospace" text-anchor="end">${dLabel(series[series.length - 1].date)}</text>`;
+  }
+
+  svg += '</svg>';
+  return { svg, xs, plotTop: padT, plotBottom: padT + plotH, lo, hi };
+}

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { metricForExercise, seriesForExercise, statsForExercise } from '../src/progress.js';
+import { metricForExercise, seriesForExercise, statsForExercise, statFor } from '../src/progress.js';
 
 const sessions = [
   { date: '2026-01-02T10:00:00.000Z', exercises: [
@@ -74,6 +74,39 @@ test('seriesForExercise: explicit set.side overrides capture order', () => {
   const s = seriesForExercise(ps, 'c', true, 'reps');
   assert.deepEqual(s[0].leftVals, [20]);   // side:0
   assert.deepEqual(s[0].rightVals, [8]);   // side:1
+});
+
+test('statFor: weight avg is rep-weighted, min/max are raw extremes', () => {
+  const s = statFor([{ weight: 20, reps: 8 }, { weight: 30, reps: 10 }], 'weight');
+  assert.equal(s.min, 20);
+  assert.equal(s.max, 30);
+  assert.ok(Math.abs(s.avg - 460 / 18) < 1e-9); // (8*20 + 10*30) / (8+10)
+});
+
+test('statFor: non-weight metric uses a plain mean', () => {
+  const s = statFor([{ reps: 8 }, { reps: 12 }, { reps: 10 }], 'reps');
+  assert.equal(s.min, 8);
+  assert.equal(s.max, 12);
+  assert.equal(s.avg, 10);
+});
+
+test('statFor: empty/null yields null', () => {
+  assert.equal(statFor([], 'weight'), null);
+  assert.equal(statFor(null, 'weight'), null);
+});
+
+test('seriesForExercise: exposes statLeft/statRight/statAll with per-side stats', () => {
+  const ps = [ { date: '2026-05-01T08:00:00.000Z', exercises: [
+    { exerciseId: 'sle', weighted: true, measureBy: 'reps', perSide: true,
+      sets: [ { weight: 15, reps: 10, side: 0 }, { weight: 20, reps: 6, side: 0 },
+              { weight: 12, reps: 8, side: 1 } ] } ] } ];
+  const s = seriesForExercise(ps, 'sle', true, 'weight');
+  assert.equal(s[0].statLeft.min, 15);
+  assert.equal(s[0].statLeft.max, 20);
+  assert.ok(Math.abs(s[0].statLeft.avg - (15 * 10 + 20 * 6) / 16) < 1e-9);
+  assert.equal(s[0].statRight.min, 12);
+  assert.equal(s[0].statRight.max, 12);
+  assert.equal(s[0].statAll.max, 20);
 });
 
 test('seriesForExercise: per-side weight splits different L/R loads into separate series', () => {

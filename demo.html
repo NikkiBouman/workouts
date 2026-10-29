@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grafiek-demo — min / gem / max</title>
+<style>
+  :root { --bg:#f4f5f7; --s1:#ffffff; --border:#d1d9e6; --text:#1a2332; --muted:#6b7a90; }
+  * { box-sizing:border-box; }
+  body { font-family:system-ui,-apple-system,sans-serif; background:var(--bg); color:var(--text); margin:0; padding:1.2rem; }
+  .card { max-width:480px; margin:0 auto; background:var(--s1); border:1px solid var(--border); border-radius:14px; padding:1rem 1.1rem 1.2rem; }
+  h2 { margin:0.2rem 0 0.8rem; font-size:1.1rem; }
+  .row { display:flex; align-items:center; flex-wrap:wrap; }
+  select { font:inherit; padding:0.35rem 0.5rem; border:1px solid var(--border); border-radius:8px; background:var(--s1); color:var(--text); }
+  .muted { color:var(--muted); }
+  .hint { font-size:0.75rem; color:var(--muted); margin-top:0.9rem; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Voortgang — min / gem / max</h2>
+  <label class="row" style="gap:0.5rem;margin-bottom:0.8rem;font-size:0.9rem;">
+    Oefening:
+    <select id="exSel" onchange="selectEx(this.value)"></select>
+  </label>
+  <div id="chart"></div>
+  <div class="hint">Dummydata. Tik op de legenda om links/rechts of min/gem/max aan/uit te zetten; tik op een punt in de grafiek voor de cijfers. Avg = rep-gewogen gemiddelde (Σ kg·reps / Σ reps).</div>
+</div>
+
+<script type="module">
+import { seriesForExercise } from './src/progress.js';
+import { buildStatChart } from './src/chart.js';
+
+const CHART_COL = { left:'#3b82f6', right:'#f59e0b', single:'#8b5cf6' };
+const GRID = '#d8dee9', LABEL = '#8a97ab';
+
+// ---------- dummy data ----------
+const exercises = [
+  { id:'sle',   name:'Single Leg Extension', weighted:true, measureBy:'reps', perSide:true },
+  { id:'squat', name:'Squat',                weighted:true, measureBy:'reps', perSide:false },
+];
+const wk = n => { const d = new Date('2026-09-01T18:00:00.000Z'); d.setDate(d.getDate() + n * 7); return d.toISOString(); };
+
+const sessions = [];
+// Single-leg extension: left a touch stronger than right, both progressing weekly,
+// weight climbing within each session so min<avg<max is visible.
+for (let k = 0; k < 6; k++) {
+  const lb = 15 + k, rb = 12 + k;
+  sessions.push({ id:'s_sle_' + k, date: wk(k), workoutName:'Benen', exercises:[{
+    exerciseId:'sle', name:'Single Leg Extension', weighted:true, measureBy:'reps', perSide:true,
+    sets:[
+      { weight:lb,     reps:10, side:0 }, { weight:lb + 2, reps:8, side:0 }, { weight:lb + 4, reps:6, side:0 },
+      { weight:rb,     reps:10, side:1 }, { weight:rb + 2, reps:8, side:1 }, { weight:rb + 3, reps:6, side:1 },
+    ],
+  }]});
+}
+// Squat: single (non per-side) progression.
+for (let k = 0; k < 5; k++) {
+  const b = 40 + k * 2.5;
+  sessions.push({ id:'s_sq_' + k, date: wk(k), workoutName:'Benen', exercises:[{
+    exerciseId:'squat', name:'Squat', weighted:true, measureBy:'reps', perSide:false,
+    sets:[ { weight:b, reps:10 }, { weight:b + 5, reps:8 }, { weight:b + 10, reps:5 } ],
+  }]});
+}
+
+// ---------- state ----------
+let current = 'sle';
+let hidden = { left:false, right:false };
+let statHidden = { min:false, avg:false, max:false };
+let seriesCache = [];
+let geom = {};
+
+const chip = (on, color, label, onclick) =>
+  `<span onclick="${onclick}" style="cursor:pointer;user-select:none;color:${color};font-weight:700;opacity:${on ? 1 : 0.4};text-decoration:${on ? 'none' : 'line-through'};">${label}</span>`;
+
+window.selectEx  = id => { current = id; hidden = { left:false, right:false }; statHidden = { min:false, avg:false, max:false }; render(); };
+window.toggleSide = s => { hidden[s] = !hidden[s]; render(); };
+window.toggleStat = k => { statHidden[k] = !statHidden[k]; render(); };
+
+window.showChartPoint = i => {
+  const p = seriesCache[i], el = document.getElementById('detail');
+  if (!p || !el) return;
+  const sel = document.getElementById('chartSelLine');
+  if (sel && geom.xs) { const xi = geom.xs[i]; sel.setAttribute('x1', xi); sel.setAttribute('x2', xi); sel.setAttribute('y1', geom.plotTop); sel.setAttribute('y2', geom.plotBottom); sel.style.display = ''; }
+  const num = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
+  const fs = st => st ? `min <b>${num(st.min)}</b> · gem <b>${num(st.avg)}</b> · max <b>${num(st.max)}</b> kg` : '–';
+  const date = new Date(p.date).toLocaleDateString('nl-NL', { weekday:'short', day:'numeric', month:'long' });
+  el.innerHTML = p.perSide
+    ? `<b>${date}</b><br><span style="color:${CHART_COL.left};font-weight:700;">● Links</span> ${fs(p.statLeft)}<br><span style="color:${CHART_COL.right};font-weight:700;">● Rechts</span> ${fs(p.statRight)}`
+    : `<b>${date}</b><br>${fs(p.statAll)}`;
+};
+
+function render() {
+  const ex = exercises.find(e => e.id === current);
+  const series = seriesForExercise(sessions, current, !!ex.perSide, 'weight');
+  seriesCache = series;
+  const res = buildStatChart(series, {
+    perSide: !!ex.perSide, hidden, statHidden,
+    colors: { left:CHART_COL.left, right:CHART_COL.right, single:CHART_COL.single, grid:GRID, label:LABEL, bg:'var(--bg)' },
+    unit: ' kg',
+  });
+  geom = res;
+  const sideLeg = ex.perSide
+    ? `<div class="row" style="gap:1rem;font-size:0.8rem;margin-bottom:0.2rem;">${chip(!hidden.left, CHART_COL.left, '● Links', "toggleSide('left')")}${chip(!hidden.right, CHART_COL.right, '● Rechts', "toggleSide('right')")}</div>`
+    : '';
+  const sc = ex.perSide ? 'var(--muted)' : CHART_COL.single;
+  const statLeg = `<div class="row" style="gap:1rem;font-size:0.8rem;margin-bottom:0.45rem;">${chip(!statHidden.min, sc, 'Min', "toggleStat('min')")}${chip(!statHidden.avg, sc, 'Gem.', "toggleStat('avg')")}${chip(!statHidden.max, sc, 'Max', "toggleStat('max')")}</div>`;
+  document.getElementById('chart').innerHTML = sideLeg + statLeg + res.svg +
+    `<div id="detail" class="muted" style="margin-top:0.6rem;font-size:0.85rem;">Tik op een punt voor min/gem/max.</div>`;
+}
+
+document.getElementById('exSel').innerHTML = exercises.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+render();
+</script>
+</body>
+</html>

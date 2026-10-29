@@ -19,6 +19,24 @@ function entriesFor(sessions, exerciseId) {
 
 export function avg(arr) { return arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : 0; }
 
+// {min, avg, max} of a set list for a metric, or null when empty. For weight the
+// average is rep-weighted (Σ weight·reps / Σ reps) so heavier high-rep sets count
+// more; for speed it is duration-weighted; otherwise a plain mean.
+export function statFor(sets, metricKey) {
+  if (!sets || !sets.length) return null;
+  const vals = sets.map(s => setMetric(s, metricKey));
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  let a = mean;
+  if (metricKey === 'weight') {
+    const totReps = sets.reduce((acc, s) => acc + (s.reps || 0), 0);
+    if (totReps > 0) a = sets.reduce((acc, s) => acc + (s.weight || 0) * (s.reps || 0), 0) / totReps;
+  } else if (metricKey === 'speed') {
+    const totDur = sets.reduce((acc, s) => acc + (s.duration || 0), 0);
+    if (totDur > 0) a = sets.reduce((acc, s) => acc + (s.speed || 0) * (s.duration || 0), 0) / totDur;
+  }
+  return { min: Math.min(...vals), avg: a, max: Math.max(...vals) };
+}
+
 // The metric value of a single set (weight / duration / reps).
 function setMetric(set, metricKey) {
   if (metricKey === 'weight') return set.weight || 0;
@@ -46,6 +64,7 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
     const sets = e.sets || [];
     const isPerSide = perSide || !!e.perSide;
     const leftVals = [], rightVals = [], allVals = [];
+    const leftSets = [], rightSets = [];
     const repsAll = [], weightAll = [], durAll = [];
     sets.forEach((set, i) => {
       const v = setMetric(set, metricKey);
@@ -53,7 +72,11 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       repsAll.push(set.reps || 0);
       weightAll.push(set.weight || 0);
       durAll.push(set.duration || 0);
-      if (isPerSide) (sideOf(set, i, true) === 0 ? leftVals : rightVals).push(v);
+      if (isPerSide) {
+        const side = sideOf(set, i, true);
+        (side === 0 ? leftVals : rightVals).push(v);
+        (side === 0 ? leftSets : rightSets).push(set);
+      }
     });
     const durTotal = durAll.reduce((a, b) => a + b, 0);
     // For speed (cardio), the session's overall value is the duration-weighted
@@ -74,6 +97,9 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       avgLeft: avg(leftVals), avgRight: avg(rightVals), avgAll: avgAllVal,
       repsAvg: avg(repsAll), weightAvg: avg(weightAll), durAvg: avg(durAll), durTotal,
       speedMax, speedMaxDur,
+      statAll: statFor(sets, metricKey),
+      statLeft: statFor(leftSets, metricKey),
+      statRight: statFor(rightSets, metricKey),
     });
   }
   return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
