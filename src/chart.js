@@ -137,11 +137,11 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const td = (t, h) => `<td style="padding:0.1rem 0.4rem;text-align:right;font-family:var(--mono);${hide(h)}">${t === '' ? '–' : t}</td>`;
   const tdIdx = t => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);color:var(--muted);">${t}</td>`;
   const blank = h => `<td style="padding:0.1rem 0.4rem;${hide(h)}"></td>`;
-  // Left↔right imbalance as a percentage, relative to their average. Empty if either missing.
+  // Left↔right imbalance as a percentage (1 decimal), relative to their average.
   const pctDiff = (a, b) => {
     if (a == null || b == null) return '';
     const m = (a + b) / 2;
-    return m === 0 ? '' : num(Math.round(Math.abs(a - b) / m * 1000) / 10) + '%';
+    return m === 0 ? '' : (Math.abs(a - b) / m * 100).toFixed(1).replace('.', ',') + '%';
   };
   const table = (head, body) => `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
@@ -238,9 +238,9 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
   const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
   const badge = v => {
     if (v == null || !isFinite(v)) return '<span style="color:var(--muted);">–</span>';
-    if (Math.abs(v) < 0.05) return '<span style="color:var(--muted);">0%</span>';
+    if (Math.abs(v) < 0.05) return '<span style="color:var(--muted);">0,0%</span>';
     const col = v > 0 ? 'var(--green)' : 'var(--red)';
-    return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toString().replace('.', ',')}%</span>`;
+    return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')}%</span>`;
   };
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const hidden = opts.hidden || {};
@@ -249,11 +249,11 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
     if (side === 'diff') return (hidden.left || hidden.right) ? 'visibility:hidden;' : '';
     return (side && hidden[side]) ? 'visibility:hidden;' : '';
   };
-  // Left↔right imbalance of one session (relative to their average), as a plain %.
+  // Left↔right imbalance of one session (relative to their average), as a % (1 decimal).
   const diffPct = (a, b) => {
     if (a == null || b == null) return '–';
     const m = (a + b) / 2;
-    return m === 0 ? '–' : (Math.round(Math.abs(a - b) / m * 1000) / 10).toString().replace('.', ',') + '%';
+    return m === 0 ? '–' : (Math.abs(a - b) / m * 100).toFixed(1).replace('.', ',') + '%';
   };
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
   const thC = (t, color, span, h, align) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:${align || (span ? 'center' : 'right')};color:${color || 'var(--muted)'};${h}">${t}</th>`;

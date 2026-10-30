@@ -105,7 +105,7 @@ test('comparisonTableHtml: tapped point is the pivot; refs show % vs it, chronol
   const html = comparisonTableHtml(series, 1, cols); // tap the middle (12 kg)
   assert.ok(!html.includes('Dit punt')); // text labels replaced by session numbers
   assert.ok(html.includes('box-shadow:inset 3px 0 0')); // chosen point highlighted
-  assert.ok(html.includes('+25%'));   // later weight: (15-12)/12 = +25 (green, future)
+  assert.ok(html.includes('+25,0%'));   // later weight: (15-12)/12 = +25 (green, future)
   assert.ok(html.includes('var(--green)') && html.includes('var(--red)'));
   // first column shows the session ordinals 1,2,3 in chronological order
   assert.ok(html.includes('>1</td>') && html.includes('>2</td>') && html.includes('>3</td>'));
@@ -162,7 +162,7 @@ test('sessionSetTableHtml: per-side summary has a Verschil L/R column (plain %)'
   const sets = [{ weight: 18, reps: 10, side: 0 }, { weight: 14, reps: 10, side: 1 }];
   const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80' });
   assert.ok(html.includes('Verschil'));
-  assert.ok(html.includes('>25%</td>'));  // kg: |18-14| / ((18+14)/2) = 4/16 = 25%, no ± prefix
+  assert.ok(html.includes('>25,0%</td>'));  // kg: |18-14| / ((18+14)/2) = 4/16 = 25%, no ± prefix
   assert.ok(!html.includes('±'));          // ± prefix removed
 });
 
