@@ -103,12 +103,19 @@ test('comparisonTableHtml: tapped point is the pivot; refs show % vs it, chronol
   ];
   const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }, { label: 'reps', value: p => p.repsAvg }];
   const html = comparisonTableHtml(series, 1, metrics); // tap the middle (12 kg)
-  assert.ok(html.includes('Dit punt') && html.includes('Eerder') && html.includes('Later'));
+  assert.ok(html.includes('Eerste keer') && html.includes('Dit punt') && html.includes('Volgende keer'));
   assert.ok(html.includes('+25%'));   // later weight: (15-12)/12 = +25 (green, future)
   assert.ok(html.includes('var(--green)') && html.includes('var(--red)'));
-  // 'Dit punt' sits between the earlier and later rows (history above, future below)
-  assert.ok(html.indexOf('Eerder') < html.indexOf('Dit punt'));
-  assert.ok(html.indexOf('Dit punt') < html.indexOf('Later'));
+  // 'Dit punt' sits between history (above) and future (below)
+  assert.ok(html.indexOf('Eerste keer') < html.indexOf('Dit punt'));
+  assert.ok(html.indexOf('Dit punt') < html.indexOf('Volgende keer'));
+});
+
+test('comparisonTableHtml: all five labels appear when tapping a middle session', () => {
+  const series = [10, 11, 12, 13, 14].map((w, k) => ({ date: `2026-09-0${k + 1}T08:00:00.000Z`, statAll: { avg: w }, repsAvg: 8 }));
+  const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }];
+  const html = comparisonTableHtml(series, 2, metrics); // tap the 3rd of 5
+  ['Eerste keer', 'Vorige keer', 'Dit punt', 'Volgende keer', 'Recentste keer'].forEach(l => assert.ok(html.includes(l), l));
 });
 
 test('comparisonTableHtml: empty when fewer than two sessions', () => {

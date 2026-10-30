@@ -195,10 +195,14 @@ export function comparisonTableHtml(series, i, metrics) {
 
   const seen = new Set();
   const rows = [];
-  const add = idx => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); rows.push(idx); } };
-  add(i); add(0); add(i - 1); add(i + 1); add(n - 1);
+  const add = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); rows.push({ idx, label }); } };
+  add(i, 'Dit punt');
+  add(0, 'Eerste keer');
+  add(i - 1, 'Vorige keer');
+  add(i + 1, 'Volgende keer');
+  add(n - 1, 'Recentste keer');
   if (rows.length < 2) return '';
-  rows.sort((a, b) => a - b); // chronological: history on top, future below
+  rows.sort((a, b) => a.idx - b.idx); // chronological: history on top, future below
 
   const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
   const badge = v => {
@@ -210,10 +214,9 @@ export function comparisonTableHtml(series, i, metrics) {
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;color:var(--muted);';
   const head = `<tr><th style="${thBase}text-align:left;">wanneer</th>${metrics.map(m => `<th style="${thBase}text-align:center;">${m.label}</th>`).join('')}</tr>`;
-  const body = rows.map(idx => {
+  const body = rows.map(({ idx, label }) => {
     const r = series[idx];
     const isSel = idx === i;
-    const label = isSel ? 'Dit punt' : (idx < i ? 'Eerder' : 'Later');
     const cells = metrics.map(m => isSel
       ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);">—</td>`
       : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(m.value(r), m.value(sel)))}</td>`).join('');
