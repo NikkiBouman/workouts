@@ -216,6 +216,7 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
   };
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const hidden = opts.hidden || {};
+  const basis = opts.basis || 'gemiddelde';
   const hideFor = side => (side && hidden[side]) ? 'visibility:hidden;' : '';
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
   const thC = (t, color, span, h) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};${h}">${t}</th>`;
@@ -234,40 +235,42 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
     return `<tr style="${rowStyle}"><td title="${dLab(r.date)}" style="padding:0.12rem 0.4rem;text-align:center;font-size:0.72rem;${numStyle}">${idx + 1}</td>${cells}</tr>`;
   }).join('');
   return `<div style="margin-top:0.5rem;border-top:1px solid var(--border);padding-top:0.35rem;">`
-    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(t.o.v. dit punt · nr = hoeveelste keer)</span></div>`
+    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(op basis van ${basis})</span></div>`
     + `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
 
 // Column spec for the comparison table, matching the set table's shape for this
-// exercise. Returns { cols, groups? } to pass to comparisonTableHtml.
-// opts: { colLeft, colRight, metric, cardioMode }.
+// exercise. The % is computed on the chosen stat (statKey: 'avg' | 'max' | 'min').
+// Returns { cols, groups? } to pass to comparisonTableHtml.
+// opts: { colLeft, colRight, metric, cardioMode, statKey }.
 export function comparisonColumns(ex, opts = {}) {
-  const { colLeft = '#3b82f6', colRight = '#f59e0b', metric = 'weight', cardioMode = 'avg' } = opts;
+  const { colLeft = '#3b82f6', colRight = '#f59e0b', metric = 'weight', cardioMode = 'avg', statKey = 'avg' } = opts;
+  const stat = (obj) => obj ? obj[statKey] : 0;
   if (metric === 'speed') {
     return { cols: [{ label: 'snelheid', value: pt => (cardioMode === 'max' ? pt.speedMax : pt.avgAll) }] };
   }
   if (ex.perSide && ex.weighted && metric !== 'duration') {
     return {
       cols: [
-        { label: 'kg', color: colLeft, side: 'left', value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
-        { label: 'reps', color: colLeft, side: 'left', value: pt => pt.repsAvgLeft || 0 },
-        { label: 'kg', color: colRight, side: 'right', value: pt => pt.statRight ? pt.statRight.avg : 0 },
-        { label: 'reps', color: colRight, side: 'right', value: pt => pt.repsAvgRight || 0 },
+        { label: 'kg', color: colLeft, side: 'left', value: pt => stat(pt.statLeft) },
+        { label: 'reps', color: colLeft, side: 'left', value: pt => stat(pt.repsStatLeft) },
+        { label: 'kg', color: colRight, side: 'right', value: pt => stat(pt.statRight) },
+        { label: 'reps', color: colRight, side: 'right', value: pt => stat(pt.repsStatRight) },
       ],
       groups: [{ label: 'Links', color: colLeft, side: 'left', span: 2 }, { label: 'Rechts', color: colRight, side: 'right', span: 2 }],
     };
   }
   if (ex.perSide) {
     return { cols: [
-      { label: 'Links', color: colLeft, side: 'left', value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
-      { label: 'Rechts', color: colRight, side: 'right', value: pt => pt.statRight ? pt.statRight.avg : 0 },
+      { label: 'Links', color: colLeft, side: 'left', value: pt => stat(pt.statLeft) },
+      { label: 'Rechts', color: colRight, side: 'right', value: pt => stat(pt.statRight) },
     ] };
   }
   if (ex.weighted) {
     return { cols: [
-      { label: 'gewicht', value: pt => pt.statAll ? pt.statAll.avg : 0 },
-      { label: 'reps', value: pt => pt.repsAvg || 0 },
+      { label: 'gewicht', value: pt => stat(pt.statAll) },
+      { label: 'reps', value: pt => stat(pt.repsStatAll) },
     ] };
   }
-  return { cols: [{ label: metric === 'duration' ? 'duur' : 'reps', value: pt => pt.statAll ? pt.statAll.avg : 0 }] };
+  return { cols: [{ label: metric === 'duration' ? 'duur' : 'reps', value: pt => stat(pt.statAll) }] };
 }

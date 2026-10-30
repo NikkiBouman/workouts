@@ -1158,10 +1158,15 @@ function showChartPoint(i) {
     }
   }
   // Comparison vs other sessions, as a table that mirrors the set table's columns.
+  // Which stat drives the %: follow the min/avg/max toggles, priority avg > max > min.
+  const statKey = chartMeta.metric === 'speed'
+    ? (chartMeta.cardioMode === 'max' ? 'max' : 'avg')
+    : (!chartStatHidden.avg ? 'avg' : !chartStatHidden.max ? 'max' : !chartStatHidden.min ? 'min' : 'avg');
+  const basis = statKey === 'avg' ? 'gemiddelde' : statKey;
   const { cols, groups } = window.Chart.comparisonColumns(
     { perSide: chartMeta.perSide, weighted: chartMeta.weighted },
-    { colLeft: chartMeta.colLeft, colRight: chartMeta.colRight, metric: chartMeta.metric, cardioMode: chartMeta.cardioMode });
-  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, cols, { groups, hidden: chartHidden });
+    { colLeft: chartMeta.colLeft, colRight: chartMeta.colRight, metric: chartMeta.metric, cardioMode: chartMeta.cardioMode, statKey });
+  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, cols, { groups, hidden: chartHidden, basis });
 
   // Set breakdown of this session for the current exercise (replaces the old list).
   const sessObj = loadHistory().find(s => s.id === p.id);

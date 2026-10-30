@@ -120,19 +120,22 @@ test('comparisonTableHtml: first column shows session ordinals (1..5) when tappi
   ['>1</td>', '>2</td>', '>3</td>', '>4</td>', '>5</td>'].forEach(nr => assert.ok(html.includes(nr), nr));
 });
 
-test('comparisonColumns: per-side weighted yields 4 columns grouped Links/Rechts', () => {
-  const { cols, groups } = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight' });
-  assert.equal(cols.length, 4);
-  assert.equal(groups.length, 2);
-  assert.deepEqual(groups.map(g => g.label), ['Links', 'Rechts']);
+test('comparisonColumns: per-side weighted gives 4 grouped columns; statKey drives the %', () => {
   const series = [
-    { date: '2026-09-01T08:00:00.000Z', statLeft: { avg: 15 }, statRight: { avg: 12 }, repsAvgLeft: 10, repsAvgRight: 10 },
-    { date: '2026-09-08T08:00:00.000Z', statLeft: { avg: 17 }, statRight: { avg: 13 }, repsAvgLeft: 10, repsAvgRight: 8 },
+    { date: '2026-09-01T08:00:00.000Z', statLeft: { min: 14, avg: 15, max: 16 }, statRight: { min: 11, avg: 12, max: 13 }, repsStatLeft: { min: 8, avg: 9, max: 10 }, repsStatRight: { min: 8, avg: 9, max: 10 } },
+    { date: '2026-09-08T08:00:00.000Z', statLeft: { min: 16, avg: 17, max: 18 }, statRight: { min: 12, avg: 13, max: 14 }, repsStatLeft: { min: 8, avg: 9, max: 10 }, repsStatRight: { min: 8, avg: 9, max: 10 } },
   ];
-  const html = comparisonTableHtml(series, 1, cols, { groups });
-  assert.ok(html.includes('Links') && html.includes('Rechts'));
-  assert.ok(html.includes('>kg</th>') && html.includes('>reps</th>'));
-  assert.ok(html.includes('var(--red)')); // Eerste keer L kg (15 vs 17) is lower
+  const avg = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight', statKey: 'avg' });
+  assert.equal(avg.cols.length, 4);
+  assert.deepEqual(avg.groups.map(g => g.label), ['Links', 'Rechts']);
+  const htmlAvg = comparisonTableHtml(series, 1, avg.cols, { groups: avg.groups, basis: 'gemiddelde' });
+  assert.ok(htmlAvg.includes('op basis van gemiddelde'));
+  assert.ok(htmlAvg.includes('-11,8%'));   // L kg avg: (15-17)/17
+
+  const max = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight', statKey: 'max' });
+  const htmlMax = comparisonTableHtml(series, 1, max.cols, { groups: max.groups, basis: 'max' });
+  assert.ok(htmlMax.includes('op basis van max'));
+  assert.ok(htmlMax.includes('-11,1%'));   // L kg max: (16-18)/18 — differs, so statKey is used
 });
 
 test('comparisonTableHtml: a hidden side blanks its columns (kept, not removed)', () => {
