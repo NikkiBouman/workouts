@@ -96,7 +96,7 @@ window.showChartPoint = i => {
   const sess = sessions.find(s => s.id === p.id);
   const e = sess && sess.exercises.find(x => x.exerciseId === current);
   const setDetail = e
-    ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetTableHtml(ex, e.sets, { colLeft: CHART_COL.left, colRight: CHART_COL.right, hidden })}</div>`
+    ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetTableHtml(ex, e.sets, { colLeft: CHART_COL.left, colRight: CHART_COL.right, hidden, statHidden })}</div>`
     : '';
 
   const { cols, groups } = comparisonColumns(ex, { colLeft: CHART_COL.left, colRight: CHART_COL.right, metric: 'weight' });

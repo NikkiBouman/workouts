@@ -154,6 +154,16 @@ test('sessionSetTableHtml: a hidden side blanks its columns (kept, not removed)'
   assert.ok(html.includes('Links') && html.includes('Rechts'));
 });
 
+test('sessionSetTableHtml: hiding a stat drops that summary row', () => {
+  const ex = { type: 'strength', perSide: false, weighted: true, measureBy: 'reps' };
+  const sets = [{ weight: 40, reps: 10 }, { weight: 45, reps: 8 }];
+  const full = sessionSetTableHtml(ex, sets);
+  assert.ok(full.includes('>min<') && full.includes('>gem<') && full.includes('>max<'));
+  const noMin = sessionSetTableHtml(ex, sets, { statHidden: { min: true } });
+  assert.ok(!noMin.includes('>min<'));                       // min row removed
+  assert.ok(noMin.includes('>gem<') && noMin.includes('>max<'));
+});
+
 test('comparisonTableHtml: empty when fewer than two sessions', () => {
   assert.equal(comparisonTableHtml([{ date: 'x', statAll: { avg: 1 } }], 0, [{ label: 'g', value: p => p.statAll.avg }]), '');
 });

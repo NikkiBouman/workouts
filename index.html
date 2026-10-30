@@ -978,7 +978,7 @@ function renderExerciseDetail(id) {
 
 // Set breakdown table of one logged exercise, used in the chart-point detail.
 function sessionSetDetail(ex, e) {
-  return window.Chart.sessionSetTableHtml(ex, e.sets || [], { colLeft: CHART_COL.left, colRight: CHART_COL.right, speedUnit, kmhToPace, hidden: chartHidden });
+  return window.Chart.sessionSetTableHtml(ex, e.sets || [], { colLeft: CHART_COL.left, colRight: CHART_COL.right, speedUnit, kmhToPace, hidden: chartHidden, statHidden: chartStatHidden });
 }
 
 const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };

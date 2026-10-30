@@ -126,7 +126,7 @@ export function buildStatChart(series, opts) {
 // columns are kept (visibility:hidden) so the table doesn't shift, just blanks out.
 export function sessionSetTableHtml(ex, sets, opts = {}) {
   sets = sets || [];
-  const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v), hidden = {} } = opts;
+  const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v), hidden = {}, statHidden = {} } = opts;
   const hL = !!hidden.left, hR = !!hidden.right;
   const num = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
   const favg = v => (v == null) ? '' : num(Math.round(v * 10) / 10);
@@ -137,9 +137,10 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const table = (head, body) => `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
 
-  // Bold min/gem/max summary rows. cols: [{ stat, h }]; the label sits in the '#' column
-  // and the first row carries a divider above it.
-  const summary = cols => ['min', 'avg', 'max'].map((k, i) => {
+  // Bold min/gem/max summary rows (only the ones toggled on). cols: [{ stat, h }]; the
+  // label sits in the '#' column and the first shown row carries a divider above it.
+  const visStats = ['min', 'avg', 'max'].filter(k => !statHidden[k]);
+  const summary = cols => visStats.map((k, i) => {
     const bt = i === 0 ? 'border-top:2px solid var(--border);' : '';
     const lbl = k === 'avg' ? 'gem' : k;
     const base = `padding:0.12rem 0.4rem;text-align:center;font-weight:700;${bt}`;
