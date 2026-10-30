@@ -107,13 +107,25 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
 
 export function statsForExercise(sessions, exerciseId) {
   const entries = entriesFor(sessions, exerciseId);
-  if (!entries.length) return { count: 0, lastDate: null, prWeight: 0, currentWeight: 0 };
+  const empty = { count: 0, lastDate: null, prWeight: 0, currentWeight: 0, prWeightLeft: 0, prWeightRight: 0, currentWeightLeft: 0, currentWeightRight: 0 };
+  if (!entries.length) return empty;
   const byDate = entries.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const last = byDate[byDate.length - 1];
+  // Max weight over a set list, optionally restricted to one side (0=left, 1=right);
+  // side falls back to capture order (L,R,L,R…) when not explicit.
+  const maxW = (sets, sidePick) => sets.reduce((m, s, i) => {
+    const side = (s.side === 0 || s.side === 1) ? s.side : i % 2;
+    if (sidePick != null && side !== sidePick) return m;
+    return Math.max(m, s.weight || 0);
+  }, 0);
   return {
     count: entries.length,
     lastDate: last.date,
-    prWeight: entries.reduce((m, e) => Math.max(m, e.sets.reduce((mm, s) => Math.max(mm, s.weight || 0), 0)), 0),
-    currentWeight: last.sets.reduce((m, s) => Math.max(m, s.weight || 0), 0),
+    prWeight: entries.reduce((m, e) => Math.max(m, maxW(e.sets)), 0),
+    currentWeight: maxW(last.sets),
+    prWeightLeft: entries.reduce((m, e) => Math.max(m, maxW(e.sets, 0)), 0),
+    prWeightRight: entries.reduce((m, e) => Math.max(m, maxW(e.sets, 1)), 0),
+    currentWeightLeft: maxW(last.sets, 0),
+    currentWeightRight: maxW(last.sets, 1),
   };
 }

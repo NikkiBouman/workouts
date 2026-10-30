@@ -946,12 +946,31 @@ function renderExerciseDetail(id) {
       <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${esc(ex.type)}</div></div>
     </div>`;
 
-  const fmtDate = d => d ? new Date(d).toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' }) : '—';
-  document.getElementById('exDetailStats').innerHTML = `
-    <div><div style="font-size:1.4rem;font-weight:700;">${st.count}</div><div style="font-size:0.7rem;color:var(--muted);">keer gedaan</div></div>
-    <div><div style="font-size:1.4rem;font-weight:700;">${st.prWeight || '—'}${st.prWeight ? ' kg' : ''}</div><div style="font-size:0.7rem;color:var(--muted);">PR</div></div>
-    <div><div style="font-size:1.4rem;font-weight:700;">${st.currentWeight || '—'}${st.currentWeight ? ' kg' : ''}</div><div style="font-size:0.7rem;color:var(--muted);">huidig</div></div>
-    <div><div style="font-size:0.9rem;font-weight:700;">${fmtDate(st.lastDate)}</div><div style="font-size:0.7rem;color:var(--muted);">laatst</div></div>`;
+  // Stats row: count (left) · PR + current (centre) · last date/time (right).
+  // PR/current split per leg for single-leg weighted exercises.
+  const perLeg = ex.perSide && ex.weighted;
+  const unitKg = '<span style="font-size:0.7rem;color:var(--muted);"> kg</span>';
+  const legNum = (v, color) => `<span style="color:${color};">${v || '—'}</span>`;
+  const weightCell = (single, l, r) => perLeg
+    ? `${legNum(l, CHART_COL.left)}/${legNum(r, CHART_COL.right)}${unitKg}`
+    : (single ? `${single}${unitKg}` : '—');
+  const prVal = weightCell(st.prWeight, st.prWeightLeft, st.prWeightRight);
+  const curVal = weightCell(st.currentWeight, st.currentWeightLeft, st.currentWeightRight);
+  const bigV = perLeg ? '1.05rem' : '1.4rem';
+  const lastD = st.lastDate ? new Date(st.lastDate) : null;
+  const dateStr = lastD ? lastD.toLocaleDateString('nl-NL', { day:'numeric', month:'short', year:'numeric' }) : '—';
+  const timeStr = lastD ? lastD.toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' }) : '';
+  const lbl = t => `<div style="font-size:0.7rem;color:var(--muted);">${t}</div>`;
+  const statsEl = document.getElementById('exDetailStats');
+  statsEl.style.justifyContent = 'space-between';
+  statsEl.style.alignItems = 'flex-start';
+  statsEl.innerHTML = `
+    <div style="text-align:left;"><div style="font-size:1.4rem;font-weight:700;">${st.count}</div>${lbl('keer gedaan')}</div>
+    <div style="display:flex;gap:1.1rem;text-align:center;">
+      <div><div style="font-size:${bigV};font-weight:700;">🏆 ${prVal}</div>${lbl('PR')}</div>
+      <div><div style="font-size:${bigV};font-weight:700;">${curVal}</div>${lbl('huidig')}</div>
+    </div>
+    <div style="text-align:right;"><div style="font-size:0.9rem;font-weight:700;">${dateStr}</div><div style="font-size:0.7rem;color:var(--muted);">${timeStr ? timeStr + ' · ' : ''}laatst</div></div>`;
 
   renderProgressChart(id);
 }
@@ -1020,21 +1039,26 @@ function renderStatChart(id, ex, metric) {
   chartMeta = { mode: 'stat', perSide: !!ex.perSide, unit, metric, weighted: !!ex.weighted, colLeft: CHART_COL.left, colRight: CHART_COL.right,
     xs: res.xs, plotTop: res.plotTop, plotBottom: res.plotBottom };
 
-  const chip = (on, color, label, onclick) =>
-    `<span onclick="${onclick}" style="cursor:pointer;user-select:none;color:${color};font-weight:700;opacity:${on ? 1 : 0.4};text-decoration:${on ? 'none' : 'line-through'};">${label}</span>`;
-  const sideLeg = ex.perSide
-    ? `<div class="row" style="gap:1rem;margin-bottom:0.2rem;font-size:0.75rem;">
-         ${chip(!chartHidden.left, CHART_COL.left, '● Links', "toggleChartSeries('left')")}
-         ${chip(!chartHidden.right, CHART_COL.right, '● Rechts', "toggleChartSeries('right')")}
-       </div>` : '';
-  const statCol = ex.perSide ? 'var(--muted)' : CHART_COL.single;
-  const statLeg = `<div class="row" style="gap:1rem;margin-bottom:0.3rem;font-size:0.75rem;">
-      ${chip(!chartStatHidden.min, statCol, 'Min', "toggleChartStat('min')")}
-      ${chip(!chartStatHidden.avg, statCol, 'Gem.', "toggleChartStat('avg')")}
-      ${chip(!chartStatHidden.max, statCol, 'Max', "toggleChartStat('max')")}
+  // Toggle pills. Side pills carry a filled colour dot; stat pills carry a grey key
+  // matching the chart: ○ for the min/max boundaries, ● for the avg.
+  const pill = (on, marker, label, onclick) =>
+    `<span onclick="${onclick}" style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;font-size:0.72rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:999px;border:1px solid var(--border);background:var(--s2);color:var(--text);opacity:${on ? 1 : 0.4};">${marker}<span>${label}</span></span>`;
+  const dot = c => `<span style="color:${c};font-size:0.85rem;line-height:1;">●</span>`;
+  const ring = `<span style="color:var(--muted);font-size:0.85rem;line-height:1;">○</span>`;
+  const greyDot = `<span style="color:var(--muted);font-size:0.85rem;line-height:1;">●</span>`;
+  const sideGroup = ex.perSide
+    ? `<div style="display:flex;gap:0.4rem;">
+         ${pill(!chartHidden.left, dot(CHART_COL.left), 'Links', "toggleChartSeries('left')")}
+         ${pill(!chartHidden.right, dot(CHART_COL.right), 'Rechts', "toggleChartSeries('right')")}
+       </div>` : `<div></div>`;
+  const statGroup = `<div style="display:flex;gap:0.4rem;">
+      ${pill(!chartStatHidden.min, ring, 'Min', "toggleChartStat('min')")}
+      ${pill(!chartStatHidden.avg, greyDot, 'Gem.', "toggleChartStat('avg')")}
+      ${pill(!chartStatHidden.max, ring, 'Max', "toggleChartStat('max')")}
     </div>`;
+  const legend = `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">${sideGroup}${statGroup}</div>`;
 
-  el.innerHTML = sideLeg + statLeg + res.svg +
+  el.innerHTML = legend + res.svg +
     `<div id="exChartDetail" style="margin-top:0.4rem;font-size:0.8rem;color:var(--muted);">Tik op een punt voor meer info.</div>`;
 }
 

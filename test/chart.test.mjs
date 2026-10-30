@@ -49,6 +49,26 @@ test('coincident min=avg=max draws a filled dot, not a hollow one', () => {
   assert.ok(count(svg, `fill="${COLORS.single}"`) >= 1);     // a solid dot is present
 });
 
+test('left and right coinciding -> one purple filled dot at the shared avg', () => {
+  // L: min10 max20 avg15 ; R: min14 max16 avg15 -> only the avgs overlap, at 15.
+  const sessions = [ { date: '2026-07-01T08:00:00.000Z', exercises: [
+    { exerciseId: 'sle', weighted: true, measureBy: 'reps', perSide: true,
+      sets: [ { weight: 10, reps: 10, side: 0 }, { weight: 20, reps: 10, side: 0 },
+              { weight: 14, reps: 10, side: 1 }, { weight: 16, reps: 10, side: 1 } ] } ] } ];
+  const series = seriesForExercise(sessions, 'sle', true, 'weight');
+  const { svg } = buildStatChart(series, { perSide: true, colors: COLORS, unit: ' kg' });
+  assert.equal(count(svg, '<circle'), 5);                    // 10,20 (L) + 14,16 (R) + 15 (shared)
+  assert.equal(count(svg, `fill="${COLORS.single}"`), 1);    // the shared avg is purple + filled
+});
+
+test('y-axis labels are whole numbers', () => {
+  const series = seriesForExercise(perSideSessions, 'sle', true, 'weight'); // rep-weighted avgs are fractional
+  const { svg } = buildStatChart(series, { perSide: true, colors: COLORS, unit: ' kg' });
+  const labels = [...svg.matchAll(/text-anchor="end">([0-9.]+)<\/text>/g)].map(m => m[1]);
+  assert.ok(labels.length >= 2);
+  labels.forEach(l => assert.ok(!l.includes('.'), `y-label "${l}" is not a whole number`));
+});
+
 test('empty series yields empty svg', () => {
   const r = buildStatChart([], { perSide: false, colors: COLORS });
   assert.equal(r.svg, '');

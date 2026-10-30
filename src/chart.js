@@ -35,8 +35,11 @@ export function buildStatChart(series, opts) {
   let lo = Math.min(...allVals), hi = Math.max(...allVals);
   if (lo === hi) { lo -= 1; hi += 1; }
   const span = hi - lo;
-  lo = Math.max(0, lo - span * 0.1);
-  hi = hi + span * 0.1;
+  lo = Math.max(0, Math.floor(lo - span * 0.1));
+  hi = Math.ceil(hi + span * 0.1);
+  // Whole-number gridlines: integer step, top extended to a multiple of it.
+  const yStep = Math.max(1, Math.ceil((hi - lo) / 4));
+  hi = lo + yStep * Math.ceil((hi - lo) / yStep);
 
   const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
   const y = v => padT + plotH - ((v - lo) / (hi - lo)) * plotH;
@@ -75,23 +78,28 @@ export function buildStatChart(series, opts) {
       const pts = ptStr(s.statKey, 'avg');
       if (pts.length) svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
     }
-    // Points per session: one circle per distinct value. A value is filled when it
-    // carries the avg, or when several stats coincide there — so a collapsed
-    // min = avg = max shows as a solid dot, never a hollow one.
-    series.forEach((p, i) => {
+  });
+
+  // Points per session: group every visible (side, stat) marker by value. Where left
+  // and right coincide the dot turns purple; filled when the avg is in the group,
+  // hollow when only a boundary (min/max) lands there.
+  series.forEach((p, i) => {
+    const byVal = new Map();
+    visSides.forEach(s => {
       const st = p[s.statKey];
       if (!st) return;
-      const byVal = new Map();
       visStats.forEach(k => {
         const key = st[k].toFixed(3);
-        if (!byVal.has(key)) byVal.set(key, { v: st[k], ks: [] });
-        byVal.get(key).ks.push(k);
+        if (!byVal.has(key)) byVal.set(key, { v: st[k], stats: new Set(), sides: new Set() });
+        const g = byVal.get(key); g.stats.add(k); g.sides.add(s.name);
       });
-      byVal.forEach(({ v, ks }) => {
-        svg += (ks.includes('avg') || ks.length > 1)
-          ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.2" fill="${s.color}"/>`
-          : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.2" fill="${colors.bg}" stroke="${s.color}" stroke-width="1.2"/>`;
-      });
+    });
+    byVal.forEach(({ v, stats, sides }) => {
+      const color = sides.size > 1 ? colors.single
+        : (sides.has('right') ? colors.right : (sides.has('left') ? colors.left : colors.single));
+      svg += stats.has('avg')
+        ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.2" fill="${color}"/>`
+        : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.2" fill="${colors.bg}" stroke="${color}" stroke-width="1.2"/>`;
     });
   });
 

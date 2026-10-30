@@ -129,7 +129,21 @@ test('statsForExercise returns count, lastDate, PR and current', () => {
   assert.equal(st.currentWeight, 14);
 });
 
+test('statsForExercise: per-leg PR and current for a per-side exercise', () => {
+  const ps = [
+    { date: '2026-08-01T08:00:00.000Z', exercises: [ { exerciseId: 'sle', perSide: true, weighted: true, measureBy: 'reps',
+      sets: [ { weight: 15, reps: 10, side: 0 }, { weight: 20, reps: 6, side: 0 }, { weight: 12, reps: 10, side: 1 }, { weight: 14, reps: 6, side: 1 } ] } ] },
+    { date: '2026-08-08T08:00:00.000Z', exercises: [ { exerciseId: 'sle', perSide: true, weighted: true, measureBy: 'reps',
+      sets: [ { weight: 17, reps: 10, side: 0 }, { weight: 13, reps: 10, side: 1 } ] } ] },
+  ];
+  const st = statsForExercise(ps, 'sle');
+  assert.equal(st.prWeightLeft, 20);
+  assert.equal(st.prWeightRight, 14);
+  assert.equal(st.currentWeightLeft, 17);
+  assert.equal(st.currentWeightRight, 13);
+});
+
 test('exercise with no sessions yields empty/zero', () => {
   assert.deepEqual(seriesForExercise(sessions, 'zzz'), []);
-  assert.deepEqual(statsForExercise(sessions, 'zzz'), { count: 0, lastDate: null, prWeight: 0, currentWeight: 0 });
+  assert.deepEqual(statsForExercise(sessions, 'zzz'), { count: 0, lastDate: null, prWeight: 0, currentWeight: 0, prWeightLeft: 0, prWeightRight: 0, currentWeightLeft: 0, currentWeightRight: 0 });
 });
