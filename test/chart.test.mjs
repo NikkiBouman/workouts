@@ -135,6 +135,25 @@ test('comparisonColumns: per-side weighted yields 4 columns grouped Links/Rechts
   assert.ok(html.includes('var(--red)')); // Eerste keer L kg (15 vs 17) is lower
 });
 
+test('comparisonTableHtml: a hidden side blanks its columns (kept, not removed)', () => {
+  const { cols, groups } = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight' });
+  const series = [
+    { date: '2026-09-01T08:00:00.000Z', statLeft: { avg: 15 }, statRight: { avg: 12 }, repsAvgLeft: 10, repsAvgRight: 10 },
+    { date: '2026-09-08T08:00:00.000Z', statLeft: { avg: 17 }, statRight: { avg: 13 }, repsAvgLeft: 10, repsAvgRight: 8 },
+  ];
+  const html = comparisonTableHtml(series, 1, cols, { groups, hidden: { left: true } });
+  assert.ok(html.includes('visibility:hidden'));          // left columns blanked
+  assert.ok(html.includes('Links') && html.includes('Rechts')); // both still in the markup
+});
+
+test('sessionSetTableHtml: a hidden side blanks its columns (kept, not removed)', () => {
+  const ex = { type: 'strength', perSide: true, weighted: true, measureBy: 'reps' };
+  const sets = [{ weight: 15, reps: 10, side: 0 }, { weight: 12, reps: 8, side: 1 }];
+  const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80', hidden: { right: true } });
+  assert.ok(html.includes('visibility:hidden'));
+  assert.ok(html.includes('Links') && html.includes('Rechts'));
+});
+
 test('comparisonTableHtml: empty when fewer than two sessions', () => {
   assert.equal(comparisonTableHtml([{ date: 'x', statAll: { avg: 1 } }], 0, [{ label: 'g', value: p => p.statAll.avg }]), '');
 });

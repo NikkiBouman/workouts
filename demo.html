@@ -69,6 +69,7 @@ let hidden = { left:false, right:false };
 let statHidden = { min:false, avg:false, max:false };
 let seriesCache = [];
 let geom = {};
+let selectedIndex = null;
 
 const pill = (on, marker, label, onclick) =>
   `<span onclick="${onclick}" style="display:inline-flex;align-items:center;gap:0.3rem;cursor:pointer;user-select:none;font-size:0.72rem;font-weight:700;padding:0.2rem 0.6rem;border-radius:999px;border:1px solid var(--border);background:var(--s2);color:var(--text);opacity:${on ? 1 : 0.4};">${marker}<span>${label}</span></span>`;
@@ -76,13 +77,15 @@ const dot = c => `<span style="color:${c};font-size:0.85rem;line-height:1;">●<
 const ring = `<span style="color:var(--muted);font-size:0.85rem;line-height:1;">○</span>`;
 const greyDot = `<span style="color:var(--muted);font-size:0.85rem;line-height:1;">●</span>`;
 
-window.selectEx  = id => { current = id; hidden = { left:false, right:false }; statHidden = { min:false, avg:false, max:false }; render(); };
-window.toggleSide = s => { hidden[s] = !hidden[s]; render(); };
-window.toggleStat = k => { statHidden[k] = !statHidden[k]; render(); };
+const keepSelection = () => { render(); if (selectedIndex != null) window.showChartPoint(selectedIndex); };
+window.selectEx  = id => { current = id; hidden = { left:false, right:false }; statHidden = { min:false, avg:false, max:false }; selectedIndex = null; render(); };
+window.toggleSide = s => { hidden[s] = !hidden[s]; keepSelection(); };
+window.toggleStat = k => { statHidden[k] = !statHidden[k]; keepSelection(); };
 
 window.showChartPoint = i => {
   const p = seriesCache[i], el = document.getElementById('detail');
   if (!p || !el) return;
+  selectedIndex = i;
   const sel = document.getElementById('chartSelLine');
   if (sel && geom.xs) { const xi = geom.xs[i]; sel.setAttribute('x1', xi); sel.setAttribute('x2', xi); sel.setAttribute('y1', geom.plotTop); sel.setAttribute('y2', geom.plotBottom); sel.style.display = ''; }
   const dd = new Date(p.date);
@@ -93,11 +96,11 @@ window.showChartPoint = i => {
   const sess = sessions.find(s => s.id === p.id);
   const e = sess && sess.exercises.find(x => x.exerciseId === current);
   const setDetail = e
-    ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetTableHtml(ex, e.sets, { colLeft: CHART_COL.left, colRight: CHART_COL.right })}</div>`
+    ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetTableHtml(ex, e.sets, { colLeft: CHART_COL.left, colRight: CHART_COL.right, hidden })}</div>`
     : '';
 
   const { cols, groups } = comparisonColumns(ex, { colLeft: CHART_COL.left, colRight: CHART_COL.right, metric: 'weight' });
-  const cmp = comparisonTableHtml(seriesCache, i, cols, { groups });
+  const cmp = comparisonTableHtml(seriesCache, i, cols, { groups, hidden });
 
   el.innerHTML = `<b>${date}</b>${setDetail}${cmp}`;
 };

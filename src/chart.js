@@ -122,27 +122,30 @@ export function buildStatChart(series, opts) {
 
 // Readable HTML table of one logged exercise's sets. Single-leg exercises get a
 // grouped two-row header — Links / Rechts, each spanning kg + reps; others a plain list.
-// opts: { colLeft, colRight, speedUnit, kmhToPace } (speed bits only used for cardio).
+// opts: { colLeft, colRight, speedUnit, kmhToPace, hidden:{left,right} }. A hidden side's
+// columns are kept (visibility:hidden) so the table doesn't shift, just blanks out.
 export function sessionSetTableHtml(ex, sets, opts = {}) {
   sets = sets || [];
-  const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v) } = opts;
+  const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v), hidden = {} } = opts;
+  const hL = !!hidden.left, hR = !!hidden.right;
   const num = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
   const favg = v => (v == null) ? '' : num(Math.round(v * 10) / 10);
+  const hide = h => h ? 'visibility:hidden;' : '';
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;text-align:center;';
-  const th = (t, { color, span } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};">${t}</th>`;
-  const td = t => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);">${t === '' ? '–' : t}</td>`;
+  const th = (t, { color, span, h } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};${hide(h)}">${t}</th>`;
+  const td = (t, h) => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);${hide(h)}">${t === '' ? '–' : t}</td>`;
   const table = (head, body) => `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
 
-  // Bold min/gem/max summary rows. Each column's stat object comes from statFor; the
-  // label sits in the '#' column and the first row carries a divider above it.
+  // Bold min/gem/max summary rows. cols: [{ stat, h }]; the label sits in the '#' column
+  // and the first row carries a divider above it.
   const summary = cols => ['min', 'avg', 'max'].map((k, i) => {
     const bt = i === 0 ? 'border-top:2px solid var(--border);' : '';
     const lbl = k === 'avg' ? 'gem' : k;
     const base = `padding:0.12rem 0.4rem;text-align:center;font-weight:700;${bt}`;
     const cells = cols.map(c => {
-      const v = c ? (k === 'avg' ? favg(c.avg) : num(c[k])) : '';
-      return `<td style="${base}font-family:var(--mono);">${v === '' ? '–' : v}</td>`;
+      const v = c.stat ? (k === 'avg' ? favg(c.stat.avg) : num(c.stat[k])) : '';
+      return `<td style="${base}font-family:var(--mono);${hide(c.h)}">${v === '' ? '–' : v}</td>`;
     }).join('');
     return `<tr><td style="${base}color:var(--muted);">${lbl}</td>${cells}</tr>`;
   }).join('');
@@ -163,24 +166,24 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     if (ex.weighted && !isDur) {
       const head =
         `<tr><th rowspan="2" style="${thBase}color:var(--muted);vertical-align:bottom;">#</th>` +
-        `${th('Links', { color: colLeft, span: 2, center: true })}${th('Rechts', { color: colRight, span: 2, center: true })}</tr>` +
-        `<tr>${th('kg', { color: colLeft })}${th('reps', { color: colLeft })}${th('kg', { color: colRight })}${th('reps', { color: colRight })}</tr>`;
-      const body = bodyRows((l, r) => td(num(l && l.weight)) + td(num(l && l.reps)) + td(num(r && r.weight)) + td(num(r && r.reps)))
-        + summary([statFor(L, 'weight'), statFor(L, 'reps'), statFor(R, 'weight'), statFor(R, 'reps')]);
+        `${th('Links', { color: colLeft, span: 2, h: hL })}${th('Rechts', { color: colRight, span: 2, h: hR })}</tr>` +
+        `<tr>${th('kg', { color: colLeft, h: hL })}${th('reps', { color: colLeft, h: hL })}${th('kg', { color: colRight, h: hR })}${th('reps', { color: colRight, h: hR })}</tr>`;
+      const body = bodyRows((l, r) => td(num(l && l.weight), hL) + td(num(l && l.reps), hL) + td(num(r && r.weight), hR) + td(num(r && r.reps), hR))
+        + summary([{ stat: statFor(L, 'weight'), h: hL }, { stat: statFor(L, 'reps'), h: hL }, { stat: statFor(R, 'weight'), h: hR }, { stat: statFor(R, 'reps'), h: hR }]);
       return table(head, body);
     }
     const pick = isDur ? (s => s && s.duration) : (s => s && s.reps);
     const mk = isDur ? 'duration' : 'reps';
     const unit = isDur ? ' (s)' : '';
-    const head = `<tr>${th('#')}${th('Links' + unit, { color: colLeft })}${th('Rechts' + unit, { color: colRight })}</tr>`;
-    const body = bodyRows((l, r) => td(num(pick(l))) + td(num(pick(r)))) + summary([statFor(L, mk), statFor(R, mk)]);
+    const head = `<tr>${th('#')}${th('Links' + unit, { color: colLeft, h: hL })}${th('Rechts' + unit, { color: colRight, h: hR })}</tr>`;
+    const body = bodyRows((l, r) => td(num(pick(l)), hL) + td(num(pick(r)), hR)) + summary([{ stat: statFor(L, mk), h: hL }, { stat: statFor(R, mk), h: hR }]);
     return table(head, body);
   }
 
   const rows1 = cells => sets.map((x, i) => `<tr>${td(i + 1)}${cells(x)}</tr>`).join('');
-  if (isDur) return table(`<tr>${th('#')}${th('duur (s)')}</tr>`, rows1(x => td(num(x.duration))) + summary([statFor(sets, 'duration')]));
-  if (ex.weighted) return table(`<tr>${th('#')}${th('kg')}${th('reps')}</tr>`, rows1(x => td(num(x.weight)) + td(num(x.reps))) + summary([statFor(sets, 'weight'), statFor(sets, 'reps')]));
-  return table(`<tr>${th('#')}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([statFor(sets, 'reps')]));
+  if (isDur) return table(`<tr>${th('#')}${th('duur (s)')}</tr>`, rows1(x => td(num(x.duration))) + summary([{ stat: statFor(sets, 'duration') }]));
+  if (ex.weighted) return table(`<tr>${th('#')}${th('kg')}${th('reps')}</tr>`, rows1(x => td(num(x.weight)) + td(num(x.reps))) + summary([{ stat: statFor(sets, 'weight') }, { stat: statFor(sets, 'reps') }]));
+  return table(`<tr>${th('#')}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([{ stat: statFor(sets, 'reps') }]));
 }
 
 // Comparison table around the tapped session (index i). Reference sessions —
@@ -211,18 +214,20 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
     return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toString().replace('.', ',')}%</span>`;
   };
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  const hidden = opts.hidden || {};
+  const hideFor = side => (side && hidden[side]) ? 'visibility:hidden;' : '';
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
-  const thC = (t, color, span) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};">${t}</th>`;
+  const thC = (t, color, span, h) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};${h}">${t}</th>`;
   const head = (groups && groups.length)
-    ? `<tr><th rowspan="2" style="${thBase}text-align:center;vertical-align:bottom;color:var(--muted);">keer</th>${groups.map(g => thC(g.label, g.color, g.span)).join('')}</tr>`
-      + `<tr>${cols.map(c => thC(c.label, c.color)).join('')}</tr>`
-    : `<tr>${thC('keer')}${cols.map(c => thC(c.label, c.color)).join('')}</tr>`;
+    ? `<tr><th rowspan="2" style="${thBase}text-align:center;vertical-align:bottom;color:var(--muted);">punt</th>${groups.map(g => thC(g.label, g.color, g.span, hideFor(g.side))).join('')}</tr>`
+      + `<tr>${cols.map(c => thC(c.label, c.color, null, hideFor(c.side))).join('')}</tr>`
+    : `<tr>${thC('punt')}${cols.map(c => thC(c.label, c.color, null, hideFor(c.side))).join('')}</tr>`;
   const body = rows.map(idx => {
     const r = series[idx];
     const isSel = idx === i;
     const cells = cols.map(c => isSel
-      ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);">—</td>`
-      : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(c.value(r), c.value(sel)))}</td>`).join('');
+      ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">—</td>`
+      : `<td style="padding:0.12rem 0.4rem;text-align:center;${hideFor(c.side)}">${badge(pct(c.value(r), c.value(sel)))}</td>`).join('');
     const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
     const numStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
     return `<tr style="${rowStyle}"><td title="${dLab(r.date)}" style="padding:0.12rem 0.4rem;text-align:center;font-size:0.72rem;${numStyle}">${idx + 1}</td>${cells}</tr>`;
@@ -243,18 +248,18 @@ export function comparisonColumns(ex, opts = {}) {
   if (ex.perSide && ex.weighted && metric !== 'duration') {
     return {
       cols: [
-        { label: 'kg', color: colLeft, value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
-        { label: 'reps', color: colLeft, value: pt => pt.repsAvgLeft || 0 },
-        { label: 'kg', color: colRight, value: pt => pt.statRight ? pt.statRight.avg : 0 },
-        { label: 'reps', color: colRight, value: pt => pt.repsAvgRight || 0 },
+        { label: 'kg', color: colLeft, side: 'left', value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
+        { label: 'reps', color: colLeft, side: 'left', value: pt => pt.repsAvgLeft || 0 },
+        { label: 'kg', color: colRight, side: 'right', value: pt => pt.statRight ? pt.statRight.avg : 0 },
+        { label: 'reps', color: colRight, side: 'right', value: pt => pt.repsAvgRight || 0 },
       ],
-      groups: [{ label: 'Links', color: colLeft, span: 2 }, { label: 'Rechts', color: colRight, span: 2 }],
+      groups: [{ label: 'Links', color: colLeft, side: 'left', span: 2 }, { label: 'Rechts', color: colRight, side: 'right', span: 2 }],
     };
   }
   if (ex.perSide) {
     return { cols: [
-      { label: 'Links', color: colLeft, value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
-      { label: 'Rechts', color: colRight, value: pt => pt.statRight ? pt.statRight.avg : 0 },
+      { label: 'Links', color: colLeft, side: 'left', value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
+      { label: 'Rechts', color: colRight, side: 'right', value: pt => pt.statRight ? pt.statRight.avg : 0 },
     ] };
   }
   if (ex.weighted) {

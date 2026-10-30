@@ -936,6 +936,7 @@ function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: f
 function renderExerciseDetail(id) {
   const ex = getExercise(id);
   if (!ex) return;
+  chartSelectedIndex = null;
   const sessions = loadHistory();
   const st = window.Progress.statsForExercise(sessions, id);
 
@@ -977,7 +978,7 @@ function renderExerciseDetail(id) {
 
 // Set breakdown table of one logged exercise, used in the chart-point detail.
 function sessionSetDetail(ex, e) {
-  return window.Chart.sessionSetTableHtml(ex, e.sets || [], { colLeft: CHART_COL.left, colRight: CHART_COL.right, speedUnit, kmhToPace });
+  return window.Chart.sessionSetTableHtml(ex, e.sets || [], { colLeft: CHART_COL.left, colRight: CHART_COL.right, speedUnit, kmhToPace, hidden: chartHidden });
 }
 
 const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
@@ -986,19 +987,27 @@ let chartMeta = {};
 let chartHidden = { left: false, right: false };
 let chartStatHidden = { min: false, avg: false, max: false };
 let cardioMode = 'avg'; // 'avg' | 'max' (speed charts only)
+let chartSelectedIndex = null; // which point's detail is open, so toggles can restore it
+
+// Re-render the chart, then re-open the selected point's detail so toggling a side/stat
+// keeps the chosen point in view (only the hidden columns/lines disappear).
+function rerenderChartKeepingSelection() {
+  renderProgressChart(detailExerciseId);
+  if (chartSelectedIndex != null) showChartPoint(chartSelectedIndex);
+}
 
 function toggleChartSeries(side) {
   if (side === 'left') chartHidden.left = !chartHidden.left;
   else if (side === 'right') chartHidden.right = !chartHidden.right;
-  renderProgressChart(detailExerciseId);
+  rerenderChartKeepingSelection();
 }
 
 function toggleChartStat(k) {
   chartStatHidden[k] = !chartStatHidden[k];
-  renderProgressChart(detailExerciseId);
+  rerenderChartKeepingSelection();
 }
 
-function setCardioMode(m) { cardioMode = m; renderProgressChart(detailExerciseId); }
+function setCardioMode(m) { cardioMode = m; rerenderChartKeepingSelection(); }
 
 // Min/avg/max band chart for weight/reps/duration. Cardio (speed) keeps its own
 // renderer below.
@@ -1122,6 +1131,7 @@ function showChartPoint(i) {
   const p = chartSeries[i];
   const el = document.getElementById('exChartDetail');
   if (!p || !el) return;
+  chartSelectedIndex = i;
   const selLine = document.getElementById('chartSelLine');
   if (selLine && chartMeta.xs) {
     const xi = chartMeta.xs[i];
@@ -1151,7 +1161,7 @@ function showChartPoint(i) {
   const { cols, groups } = window.Chart.comparisonColumns(
     { perSide: chartMeta.perSide, weighted: chartMeta.weighted },
     { colLeft: chartMeta.colLeft, colRight: chartMeta.colRight, metric: chartMeta.metric, cardioMode: chartMeta.cardioMode });
-  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, cols, { groups });
+  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, cols, { groups, hidden: chartHidden });
 
   // Set breakdown of this session for the current exercise (replaces the old list).
   const sessObj = loadHistory().find(s => s.id === p.id);
