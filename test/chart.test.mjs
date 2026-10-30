@@ -69,21 +69,24 @@ test('y-axis labels are whole numbers', () => {
   labels.forEach(l => assert.ok(!l.includes('.'), `y-label "${l}" is not a whole number`));
 });
 
-test('sessionSetTableHtml: per-side weighted gives L/R kg+reps columns and a row per set', () => {
+test('sessionSetTableHtml: per-side weighted has grouped Links/Rechts header + min/gem/max summary', () => {
   const ex = { type: 'strength', perSide: true, weighted: true, measureBy: 'reps' };
   const sets = [ { weight: 15, reps: 10, side: 0 }, { weight: 12, reps: 8, side: 1 },
                  { weight: 17, reps: 10, side: 0 }, { weight: 13, reps: 8, side: 1 } ];
   const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80' });
-  assert.ok(html.includes('L kg') && html.includes('R kg'));
-  assert.equal((html.match(/<tr>/g) || []).length, 3); // 1 header + 2 set rows
+  assert.ok(html.includes('Links') && html.includes('Rechts'));
+  assert.ok(html.includes('>kg</th>') && html.includes('>reps</th>'));
+  assert.ok(html.includes('>min<') && html.includes('>gem<') && html.includes('>max<'));
+  assert.equal((html.match(/<tr>/g) || []).length, 7); // 2 header + 2 set + 3 summary
   assert.ok(html.includes('>15<') && html.includes('>12<'));
 });
 
-test('sessionSetTableHtml: single weighted gives kg + reps columns', () => {
+test('sessionSetTableHtml: single weighted has kg + reps columns and a summary', () => {
   const html = sessionSetTableHtml({ type: 'strength', perSide: false, weighted: true, measureBy: 'reps' },
     [ { weight: 40, reps: 10 }, { weight: 45, reps: 8 } ]);
-  assert.ok(html.includes('>kg<') && html.includes('>reps<'));
-  assert.equal((html.match(/<tr>/g) || []).length, 3);
+  assert.ok(html.includes('>kg</th>') && html.includes('>reps</th>'));
+  assert.ok(html.includes('>min<') && html.includes('>max<'));
+  assert.equal((html.match(/<tr>/g) || []).length, 6); // 1 header + 2 set + 3 summary
 });
 
 test('empty series yields empty svg', () => {
