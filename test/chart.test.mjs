@@ -157,6 +157,14 @@ test('sessionSetTableHtml: a hidden side blanks its columns (kept, not removed)'
   assert.ok(html.includes('Links') && html.includes('Rechts'));
 });
 
+test('sessionSetTableHtml: per-side summary has a ± L/R difference column', () => {
+  const ex = { type: 'strength', perSide: true, weighted: true, measureBy: 'reps' };
+  const sets = [{ weight: 18, reps: 10, side: 0 }, { weight: 14, reps: 10, side: 1 }];
+  const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80' });
+  assert.ok(html.includes('±25%'));  // kg: |18-14| / ((18+14)/2) = 4/16 = 25%
+  assert.ok(html.includes('±0%'));   // reps equal
+});
+
 test('sessionSetTableHtml: hiding a stat drops that summary row', () => {
   const ex = { type: 'strength', perSide: false, weighted: true, measureBy: 'reps' };
   const sets = [{ weight: 40, reps: 10 }, { weight: 45, reps: 8 }];

@@ -1814,10 +1814,9 @@ function getCardioBlocks(workout) {
   return allBlocks.length ? allBlocks : (w.blocks || []);
 }
 
-function flattenWorkout(workout) {
-  const blocks = getCardioBlocks(workout);
+function flattenBlocks(blocks) {
   const steps = [];
-  blocks.forEach((block, bi) => {
+  (blocks || []).forEach((block, bi) => {
     if (block.type === 'segment') {
       steps.push({
         speed: block.speed, incline: block.incline, duration: getSegDuration(block),
@@ -1838,6 +1837,64 @@ function flattenWorkout(workout) {
     }
   });
   return steps;
+}
+
+function flattenWorkout(workout) {
+  return flattenBlocks(getCardioBlocks(workout));
+}
+
+// Speed-vs-time bar chart for a run (treadmill) profile. Returns an SVG string.
+function speedChartSvg(steps) {
+  const totalSec = steps.reduce((s, st) => s + st.duration, 0);
+  if (!totalSec) return '';
+  const maxSpeed = Math.max(...steps.map(s => s.speed));
+  const maxIncline = Math.max(...steps.map(s => s.incline));
+  const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
+  const plotW = cW - padL - padR, plotH = cH - padT - padB;
+  const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
+  const cc = chartColors();
+
+  let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
+  const ySteps = Math.min(5, yMax);
+  for (let i = 0; i <= ySteps; i++) {
+    const val = (yMax / ySteps) * i;
+    const y = padT + plotH - (val / yMax) * plotH;
+    svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
+    svg += `<text x="${padL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
+  }
+  let xOffset = 0;
+  steps.forEach(s => {
+    const x = padL + (xOffset / totalSec) * plotW;
+    const bw = (s.duration / totalSec) * plotW;
+    const h = (s.speed / yMax) * plotH;
+    const y = padT + plotH - h;
+    svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85"/>`;
+    if (bw > 18 && h > 12) svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
+    xOffset += s.duration;
+  });
+  const xLabelCount = Math.min(6, Math.ceil(totalSec / 60));
+  for (let i = 0; i <= xLabelCount; i++) {
+    const sec = Math.round((totalSec / xLabelCount) * i);
+    const x = padL + (sec / totalSec) * plotW;
+    svg += `<text x="${x}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
+  }
+  svg += `<text x="${padL}" y="${padT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
+  if (maxIncline > 0) {
+    const lgX = padL + plotW - 60;
+    for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
+    svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
+    svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)">15%</text>`;
+  }
+  svg += '</svg>';
+  return svg;
+}
+
+// Seconds a single entry contributes to the workout's duration. Rep-based
+// exercises have no duration and return 0 (they get counted separately).
+function entryDurationSec(entry, ex) {
+  if (usesTreadmill(ex)) return flattenBlocks(entry.blocks).reduce((s, st) => s + st.duration, 0);
+  if (ex.measureBy === 'duration' && entry.duration > 0) return (entry.sets || 1) * entry.duration;
+  return 0;
 }
 
 /* =============================================
@@ -1902,6 +1959,15 @@ function previewTableRow(seg) {
   </tr>`;
 }
 
+function togglePrevCard(idx) {
+  const body = document.getElementById('prevBody' + idx);
+  const chev = document.getElementById('prevChev' + idx);
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  if (chev) chev.textContent = open ? '▾' : '▸';
+}
+
 function toggleWorkoutLog() {
   const t = document.getElementById('logToggle');
   if (!t) return;
@@ -1917,64 +1983,26 @@ function openPreview(id) {
   const raw = loadWorkouts().find(w => w.id === id);
   if (!raw) return;
   const w = migrateWorkout(raw);
-  const steps = flattenWorkout(w);
-  const hasCardio = steps.length > 0;
-  const totalSec = steps.reduce((s, st) => s + st.duration, 0);
-  const maxSpeed = hasCardio ? Math.max(...steps.map(s => s.speed)) : 0;
-  const maxIncline = hasCardio ? Math.max(...steps.map(s => s.incline)) : 0;
   const entries = w.entries || [];
-  const strengthCount = entries.filter(e => getExercise(e.exerciseId)?.type === 'strength').length;
-  const stretchCount = entries.filter(e => getExercise(e.exerciseId)?.type === 'stretch').length;
 
   document.getElementById('previewName').textContent = w.name;
+
+  // --- Header: total minutes (duration-based exercises) + count of the rest ---
+  let totalSec = 0, noDurCount = 0;
+  entries.forEach(e => {
+    const ex = getExercise(e.exerciseId);
+    if (!ex) return;
+    const d = entryDurationSec(e, ex);
+    if (d > 0) totalSec += d; else noDurCount++;
+  });
+  const statParts = [];
+  if (totalSec > 0) { const m = Math.round(totalSec / 60); statParts.push(`${m} ${m === 1 ? 'minuut' : 'minuten'}`); }
+  if (noDurCount > 0) statParts.push(`${noDurCount} oefening${noDurCount !== 1 ? 'en' : ''}`);
   document.getElementById('previewStats').innerHTML =
-    `<span>${entries.length} oefening${entries.length !== 1 ? 'en' : ''}</span>${hasCardio ? `<span>${fmtTime(totalSec)} cardio</span>` : ''}${strengthCount ? `<span>${strengthCount} kracht</span>` : ''}${stretchCount ? `<span>${stretchCount} stretch</span>` : ''}`;
+    `<span>${statParts.length ? statParts.join(' + ') : `${entries.length} oefening${entries.length !== 1 ? 'en' : ''}`}</span>`;
 
-  // --- SVG Chart (only if cardio) ---
-  const chartEl = document.getElementById('previewChart');
-  if (hasCardio) {
-    const cW = 380, cH = 140, padL = 32, padR = 8, padT = 8, padB = 22;
-    const plotW = cW - padL - padR, plotH = cH - padT - padB;
-    const yMax = Math.ceil(maxSpeed / 2) * 2 + 2;
-    const cc = chartColors();
-
-    let svg = `<svg viewBox="0 0 ${cW} ${cH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;">`;
-    const ySteps = Math.min(5, yMax);
-    for (let i = 0; i <= ySteps; i++) {
-      const val = (yMax / ySteps) * i;
-      const y = padT + plotH - (val / yMax) * plotH;
-      svg += `<line x1="${padL}" y1="${y}" x2="${padL + plotW}" y2="${y}" stroke="${cc.grid}" stroke-width="0.5"/>`;
-      svg += `<text x="${padL - 4}" y="${y + 3}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="end">${Math.round(val)}</text>`;
-    }
-    let xOffset = 0;
-    steps.forEach(s => {
-      const x = padL + (xOffset / totalSec) * plotW;
-      const bw = (s.duration / totalSec) * plotW;
-      const h = (s.speed / yMax) * plotH;
-      const y = padT + plotH - h;
-      svg += `<rect x="${x}" y="${y}" width="${Math.max(bw - 0.5, 0.5)}" height="${h}" fill="${inclineColor(s.incline)}" rx="1" opacity="0.85"/>`;
-      if (bw > 18 && h > 12) svg += `<text x="${x + bw / 2}" y="${y + h / 2 + 3}" fill="rgba(255,255,255,0.85)" font-size="7" font-family="var(--mono)" font-weight="700" text-anchor="middle">${s.speed}</text>`;
-      xOffset += s.duration;
-    });
-    const xLabelCount = Math.min(6, Math.ceil(totalSec / 60));
-    for (let i = 0; i <= xLabelCount; i++) {
-      const sec = Math.round((totalSec / xLabelCount) * i);
-      const x = padL + (sec / totalSec) * plotW;
-      svg += `<text x="${x}" y="${cH - 4}" fill="${cc.label}" font-size="7" font-family="var(--mono)" text-anchor="middle">${fmtTime(sec)}</text>`;
-    }
-    svg += `<text x="${padL}" y="${padT - 1}" fill="${cc.label}" font-size="6" font-family="var(--mono)">km/h</text>`;
-    if (maxIncline > 0) {
-      const lgX = padL + plotW - 60;
-      for (let i = 0; i < 40; i++) svg += `<rect x="${lgX + i}" y="${padT - 1}" width="1.5" height="5" fill="${inclineColor((i / 39) * 15)}"/>`;
-      svg += `<text x="${lgX - 2}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)" text-anchor="end">0%</text>`;
-      svg += `<text x="${lgX + 43}" y="${padT + 3}" fill="${cc.label}" font-size="5" font-family="var(--mono)">15%</text>`;
-    }
-    svg += '</svg>';
-    chartEl.innerHTML = svg;
-    chartEl.style.display = '';
-  } else {
-    chartEl.style.display = 'none';
-  }
+  // The run chart no longer sits at the top — it now lives inside its own card.
+  document.getElementById('previewChart').style.display = 'none';
 
   // --- Entry list ---
   const tblStyle = `width:100%;border-collapse:collapse;table-layout:fixed;font-family:var(--mono);font-size:0.75rem;`;
@@ -1982,7 +2010,7 @@ function openPreview(id) {
   const tdStyle = `padding:0.35rem 0.5rem;border-bottom:1px solid var(--border);`;
   let blocksHtml = '<style>.prev-tbl th{' + thStyle + '}.prev-tbl td{' + tdStyle + '}</style>';
 
-  entries.forEach(entry => {
+  entries.forEach((entry, idx) => {
     const ex = getExercise(entry.exerciseId);
     if (!ex) return;
 
@@ -1990,25 +2018,56 @@ function openPreview(id) {
       ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="">`
       : `<div class="exercise-img" style="display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>`;
 
-    if (usesTreadmill(ex) && entry.blocks) {
-      // Treadmill: show exercise header + block table
-      blocksHtml += `<div style="display:flex;align-items:center;gap:0.5rem;margin:0.75rem 0 0.35rem;font-weight:700;">${imgHtml} ${esc(ex.name)}</div>`;
-      (entry.blocks || []).forEach(block => {
-        if (block.type === 'segment') {
-          blocksHtml += `<table class="prev-tbl" style="${tblStyle}margin-bottom:0.5rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
-            ${previewTableHead()}${previewTableRow(block)}</table>`;
-        } else {
-          blocksHtml += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.5rem;overflow:hidden;">
-            <div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.65rem;background:var(--s2);border-bottom:1px solid var(--border);">
-              <span class="tag tag-repeat">⟳ ${block.repeats}× herhalen</span>
-              <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">${fmtTime(block.segments.reduce((t, s) => t + getSegDuration(s), 0) * block.repeats)} totaal</span>
-            </div>
-            <table class="prev-tbl" style="${tblStyle}">${previewTableHead()}${block.segments.map(seg => previewTableRow(seg)).join('')}</table>
-          </div>`;
-        }
-      });
+    if (ex.type === 'cardio') {
+      // Collapsible cardio card — identical look for running and cycling; tap to
+      // unfold the detail (+ chart for the treadmill run).
+      const durSec = entryDurationSec(entry, ex);
+      const durTxt = (() => { const d = fmtDur(durSec); return `${d.val} ${d.unit}`; })();
+      let summary, body;
+
+      if (usesTreadmill(ex) && entry.blocks) {
+        const nBlocks = entry.blocks.length;
+        summary = `${durTxt} · ${nBlocks} blok${nBlocks !== 1 ? 'ken' : ''}`;
+        const chart = speedChartSvg(flattenBlocks(entry.blocks));
+        let tables = '';
+        entry.blocks.forEach(block => {
+          if (block.type === 'segment') {
+            tables += `<table class="prev-tbl" style="${tblStyle}margin-bottom:0.5rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);overflow:hidden;">
+              ${previewTableHead()}${previewTableRow(block)}</table>`;
+          } else {
+            tables += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.5rem;overflow:hidden;">
+              <div style="display:flex;align-items:center;gap:0.5rem;padding:0.5rem 0.65rem;background:var(--s2);border-bottom:1px solid var(--border);">
+                <span class="tag tag-repeat">⟳ ${block.repeats}× herhalen</span>
+                <span style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);">${fmtTime(block.segments.reduce((t, s) => t + getSegDuration(s), 0) * block.repeats)} totaal</span>
+              </div>
+              <table class="prev-tbl" style="${tblStyle}">${previewTableHead()}${block.segments.map(seg => previewTableRow(seg)).join('')}</table>
+            </div>`;
+          }
+        });
+        body = `${chart ? `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);padding:0.5rem 0.4rem 0.2rem;margin-bottom:0.6rem;overflow:hidden;">${chart}</div>` : ''}${tables}`;
+      } else {
+        // Non-treadmill cardio (e.g. cycling): duration only, no speed profile → no chart.
+        const sets = entry.sets || 1;
+        summary = durTxt;
+        body = `<div style="font-family:var(--mono);font-size:0.8rem;color:var(--muted);line-height:1.7;">
+          <div>Duur: <b style="color:var(--text);">${durTxt}</b></div>
+          ${sets > 1 ? `<div>Sets: <b style="color:var(--text);">${sets}</b></div>` : ''}
+        </div>`;
+      }
+
+      blocksHtml += `<div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:0.4rem;overflow:hidden;">
+        <div onclick="togglePrevCard(${idx})" style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.75rem;cursor:pointer;user-select:none;">
+          ${imgHtml}
+          <div style="flex:1;">
+            <div style="font-weight:700;font-size:0.85rem;">${esc(ex.name)}</div>
+            <div style="font-family:var(--mono);font-size:0.75rem;color:var(--muted);margin-top:0.15rem;">${summary}</div>
+          </div>
+          <span id="prevChev${idx}" style="color:var(--muted);font-size:0.9rem;flex-shrink:0;">▸</span>
+        </div>
+        <div id="prevBody${idx}" style="display:none;padding:0 0.75rem 0.75rem;">${body}</div>
+      </div>`;
     } else {
-      // Strength: show exercise card with details
+      // Strength / stretch: compact card with details.
       let detail = `${entry.sets || 0} sets`;
       if (entry.reps) detail += ` × ${entry.reps} reps`;
       if (entry.duration) detail += ` × ${entry.duration}s`;
@@ -3357,12 +3416,20 @@ function renderAll() {
 window.APP = {
   defaults: DEFAULT_EXERCISES,
   defaultsVersion: DEFAULTS_VERSION,
-  onReady() { renderAll(); },   // extended in Task 1.2
+  onReady() {
+    renderAll();
+    // Optional deep link: ?preview=<workoutId> opens that workout's preview.
+    const pid = new URLSearchParams(location.search).get('preview');
+    if (pid && loadWorkouts().some(w => w.id === pid)) openPreview(pid);
+  },
   onChange() { renderAll(); if (document.getElementById('viewExercise').classList.contains('active') && detailExerciseId) renderExerciseDetail(detailExerciseId); },
 };
 </script>
 <script type="module">
-  import * as DB from './src/db.js';
+  // Demo mode (index.html?demo): swap Firebase for an in-memory stub with dummy
+  // data so the UI can be shown on a plain localhost without signing in.
+  const DEMO = new URLSearchParams(location.search).has('demo');
+  const DB = DEMO ? await import('./src/demo-db.js') : await import('./src/db.js');
   window.DB = DB;
   import * as Progress from './src/progress.js';
   window.Progress = Progress;
