@@ -95,17 +95,20 @@ test('sessionSetTableHtml: single weighted has kg + reps columns and a summary',
   assert.equal((html.match(/<tr>/g) || []).length, 6); // 1 header + 2 set + 3 summary
 });
 
-test('comparisonTableHtml: a row per reference session with signed % change', () => {
+test('comparisonTableHtml: tapped point is the pivot; refs show % vs it, chronologically', () => {
   const series = [
     { date: '2026-09-01T08:00:00.000Z', statAll: { avg: 10 }, repsAvg: 8 },
     { date: '2026-09-08T08:00:00.000Z', statAll: { avg: 12 }, repsAvg: 10 },
     { date: '2026-09-15T08:00:00.000Z', statAll: { avg: 15 }, repsAvg: 9 },
   ];
   const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }, { label: 'reps', value: p => p.repsAvg }];
-  const html = comparisonTableHtml(series, 2, metrics); // tapped the last: 15 kg, 9 reps
-  assert.ok(html.includes('Vergelijking') && html.includes('gewicht') && html.includes('reps'));
-  assert.ok(html.includes('+50%'));  // weight vs Eerste: (15-10)/10
-  assert.ok(html.includes('Eerste') && html.includes('Vorige'));
+  const html = comparisonTableHtml(series, 1, metrics); // tap the middle (12 kg)
+  assert.ok(html.includes('Dit punt') && html.includes('Eerder') && html.includes('Later'));
+  assert.ok(html.includes('+25%'));   // later weight: (15-12)/12 = +25 (green, future)
+  assert.ok(html.includes('var(--green)') && html.includes('var(--red)'));
+  // 'Dit punt' sits between the earlier and later rows (history above, future below)
+  assert.ok(html.indexOf('Eerder') < html.indexOf('Dit punt'));
+  assert.ok(html.indexOf('Dit punt') < html.indexOf('Later'));
 });
 
 test('comparisonTableHtml: empty when fewer than two sessions', () => {

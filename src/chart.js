@@ -183,36 +183,45 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   return table(`<tr>${th('#')}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([statFor(sets, 'reps')]));
 }
 
-// Comparison table of the tapped session (index i) against reference sessions —
-// first / previous / next / most recent (deduped). Each metric is a column showing
-// the % change of this session relative to that reference (green up, red down).
-// metrics: [{ label, value: pt => number }].
+// Comparison table around the tapped session (index i). Reference sessions —
+// first, previous, next, most recent — plus the tapped point itself are listed in
+// chronological order, so everything above the highlighted 'Dit punt' row is history
+// and everything below is the future. Each reference shows its value as a % of the
+// tapped point (green when higher, red when lower). metrics: [{ label, value }].
 export function comparisonTableHtml(series, i, metrics) {
   const n = (series || []).length;
-  const p = series && series[i];
-  if (!p || n < 2 || !metrics || !metrics.length) return '';
+  const sel = series && series[i];
+  if (!sel || n < 2 || !metrics || !metrics.length) return '';
 
-  const seen = new Set([i]);
-  const targets = [];
-  const add = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); targets.push({ idx, label }); } };
-  add(0, 'Eerste'); add(i - 1, 'Vorige'); add(i + 1, 'Volgende'); add(n - 1, 'Recent');
-  if (!targets.length) return '';
+  const seen = new Set();
+  const rows = [];
+  const add = idx => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); rows.push(idx); } };
+  add(i); add(0); add(i - 1); add(i + 1); add(n - 1);
+  if (rows.length < 2) return '';
+  rows.sort((a, b) => a - b); // chronological: history on top, future below
 
   const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
   const badge = v => {
     if (v == null || !isFinite(v)) return '<span style="color:var(--muted);">–</span>';
-    const col = v > 0.5 ? 'var(--green)' : v < -0.5 ? 'var(--red)' : 'var(--muted)';
+    if (Math.abs(v) < 0.05) return '<span style="color:var(--muted);">0%</span>';
+    const col = v > 0 ? 'var(--green)' : 'var(--red)';
     return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toString().replace('.', ',')}%</span>`;
   };
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;color:var(--muted);';
-  const head = `<tr><th style="${thBase}text-align:left;">vs</th>${metrics.map(m => `<th style="${thBase}text-align:center;">${m.label}</th>`).join('')}</tr>`;
-  const body = targets.map(t => {
-    const r = series[t.idx];
-    const cells = metrics.map(m => `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(m.value(p), m.value(r)))}</td>`).join('');
-    return `<tr><td style="padding:0.12rem 0.4rem;text-align:left;color:var(--muted);font-size:0.72rem;white-space:nowrap;">${t.label} <span style="opacity:0.6;">${dLab(r.date)}</span></td>${cells}</tr>`;
+  const head = `<tr><th style="${thBase}text-align:left;">wanneer</th>${metrics.map(m => `<th style="${thBase}text-align:center;">${m.label}</th>`).join('')}</tr>`;
+  const body = rows.map(idx => {
+    const r = series[idx];
+    const isSel = idx === i;
+    const label = isSel ? 'Dit punt' : (idx < i ? 'Eerder' : 'Later');
+    const cells = metrics.map(m => isSel
+      ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);">—</td>`
+      : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(m.value(r), m.value(sel)))}</td>`).join('');
+    const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
+    const lblStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
+    return `<tr style="${rowStyle}"><td style="padding:0.12rem 0.4rem;text-align:left;font-size:0.72rem;${lblStyle}white-space:nowrap;">${label} <span style="opacity:0.6;">${dLab(r.date)}</span></td>${cells}</tr>`;
   }).join('');
   return `<div style="margin-top:0.5rem;border-top:1px solid var(--border);padding-top:0.35rem;">`
-    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking</div>`
+    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(t.o.v. dit punt)</span></div>`
     + `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;font-family:var(--mono);"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
