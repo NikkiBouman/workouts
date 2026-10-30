@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStatChart } from '../src/chart.js';
+import { buildStatChart, sessionSetTableHtml } from '../src/chart.js';
 import { seriesForExercise } from '../src/progress.js';
 
 const COLORS = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6', grid: '#eee', label: '#999', bg: '#fff' };
@@ -67,6 +67,23 @@ test('y-axis labels are whole numbers', () => {
   const labels = [...svg.matchAll(/text-anchor="end">([0-9.]+)<\/text>/g)].map(m => m[1]);
   assert.ok(labels.length >= 2);
   labels.forEach(l => assert.ok(!l.includes('.'), `y-label "${l}" is not a whole number`));
+});
+
+test('sessionSetTableHtml: per-side weighted gives L/R kg+reps columns and a row per set', () => {
+  const ex = { type: 'strength', perSide: true, weighted: true, measureBy: 'reps' };
+  const sets = [ { weight: 15, reps: 10, side: 0 }, { weight: 12, reps: 8, side: 1 },
+                 { weight: 17, reps: 10, side: 0 }, { weight: 13, reps: 8, side: 1 } ];
+  const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80' });
+  assert.ok(html.includes('L kg') && html.includes('R kg'));
+  assert.equal((html.match(/<tr>/g) || []).length, 3); // 1 header + 2 set rows
+  assert.ok(html.includes('>15<') && html.includes('>12<'));
+});
+
+test('sessionSetTableHtml: single weighted gives kg + reps columns', () => {
+  const html = sessionSetTableHtml({ type: 'strength', perSide: false, weighted: true, measureBy: 'reps' },
+    [ { weight: 40, reps: 10 }, { weight: 45, reps: 8 } ]);
+  assert.ok(html.includes('>kg<') && html.includes('>reps<'));
+  assert.equal((html.match(/<tr>/g) || []).length, 3);
 });
 
 test('empty series yields empty svg', () => {

@@ -116,3 +116,37 @@ export function buildStatChart(series, opts) {
   svg += '</svg>';
   return { svg, xs, plotTop: padT, plotBottom: padT + plotH, lo, hi };
 }
+
+// Readable HTML table of one logged exercise's sets. Single-leg exercises get
+// L kg / reps and R kg / reps columns side by side; others a plain set list.
+// opts: { colLeft, colRight, speedUnit, kmhToPace } (speed bits only used for cardio).
+export function sessionSetTableHtml(ex, sets, opts = {}) {
+  sets = sets || [];
+  const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v) } = opts;
+  const num = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
+  const th = (t, color) => `<th style="font-weight:700;color:${color || 'var(--muted)'};font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;text-align:right;">${t}</th>`;
+  const td = t => `<td style="padding:0.1rem 0.4rem;text-align:right;font-family:var(--mono);">${t === '' ? '–' : t}</td>`;
+  const wrap = (head, body) => `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  const isDur = ex.measureBy === 'duration';
+
+  if (ex.type === 'cardio') {
+    const hasSpeed = sets.some(s => s.speed != null);
+    const head = th('#') + th('min') + (hasSpeed ? th(speedUnit === 'pace' ? 'min/km' : 'km/h') : '');
+    const body = sets.map((x, i) => `<tr>${td(i + 1)}${td(Math.round((x.duration || 0) / 60))}${hasSpeed ? td(x.speed != null ? (speedUnit === 'pace' ? kmhToPace(x.speed) : num(x.speed)) : '') : ''}</tr>`).join('');
+    return wrap(head, body);
+  }
+  if (ex.perSide) {
+    const L = [], R = [];
+    sets.forEach((x, i) => { const side = (x.side === 0 || x.side === 1) ? x.side : i % 2; (side === 0 ? L : R).push(x); });
+    const n = Math.max(L.length, R.length);
+    const rows = cells => Array.from({ length: n }, (_, i) => `<tr>${td(i + 1)}${cells(L[i], R[i])}</tr>`).join('');
+    if (isDur) return wrap(th('#') + th('L (s)', colLeft) + th('R (s)', colRight), rows((l, r) => td(num(l && l.duration)) + td(num(r && r.duration))));
+    if (ex.weighted) return wrap(th('#') + th('L kg', colLeft) + th('reps', colLeft) + th('R kg', colRight) + th('reps', colRight),
+      rows((l, r) => td(num(l && l.weight)) + td(num(l && l.reps)) + td(num(r && r.weight)) + td(num(r && r.reps))));
+    return wrap(th('#') + th('L reps', colLeft) + th('R reps', colRight), rows((l, r) => td(num(l && l.reps)) + td(num(r && r.reps))));
+  }
+  const rows1 = cells => sets.map((x, i) => `<tr>${td(i + 1)}${cells(x)}</tr>`).join('');
+  if (isDur) return wrap(th('#') + th('duur (s)'), rows1(x => td(num(x.duration))));
+  if (ex.weighted) return wrap(th('#') + th('kg') + th('reps'), rows1(x => td(num(x.weight)) + td(num(x.reps))));
+  return wrap(th('#') + th('reps'), rows1(x => td(num(x.reps))));
+}

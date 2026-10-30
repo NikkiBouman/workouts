@@ -975,28 +975,9 @@ function renderExerciseDetail(id) {
   renderProgressChart(id);
 }
 
-// Formatted set breakdown of one logged exercise, used in the chart-point detail.
-// Per-side exercises are grouped L / R; others are a flat set list.
+// Set breakdown table of one logged exercise, used in the chart-point detail.
 function sessionSetDetail(ex, e) {
-  const isCardio = ex.type === 'cardio';
-  const fmtSet = x => {
-    if (x.speed != null) {
-      const sp = speedUnit === 'pace' ? `${kmhToPace(x.speed)}/km` : `${String(x.speed).replace('.', ',')} km/h`;
-      return `${Math.round((x.duration || 0) / 60)} min · ${sp}`;
-    }
-    if (x.duration != null) return isCardio ? `${Math.round(x.duration / 60)} min` : `${x.duration}s`;
-    return `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`;
-  };
-  const sets = e.sets || [];
-  if (ex.perSide) {
-    const left = [], right = [];
-    sets.forEach((x, i) => {
-      const side = (x.side === 0 || x.side === 1) ? x.side : i % 2;
-      (side === 0 ? left : right).push(fmtSet(x));
-    });
-    return `<span style="color:${CHART_COL.left};font-weight:700;">L</span> ${esc(left.join(', ') || '–')} &nbsp; <span style="color:${CHART_COL.right};font-weight:700;">R</span> ${esc(right.join(', ') || '–')}`;
-  }
-  return esc(sets.map(fmtSet).join(', '));
+  return window.Chart.sessionSetTableHtml(ex, e.sets || [], { colLeft: CHART_COL.left, colRight: CHART_COL.right, speedUnit, kmhToPace });
 }
 
 const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
