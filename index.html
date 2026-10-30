@@ -565,8 +565,6 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
     <button class="btn btn-sm btn-cyan" onclick="toggleManualAdd()">+ Sessie toevoegen</button>
     <div id="manualAddForm" style="display:none;margin-top:0.5rem;"></div>
   </div>
-  <h3 style="margin-top:1rem;">Recente sessies</h3>
-  <div id="exDetailSessions"></div>
 </div>
 
 <!-- =========================================
@@ -933,7 +931,7 @@ function hrCurveSvg(session) {
    EXERCISE DETAIL VIEW
    ============================================= */
 let detailExerciseId = null;
-function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; cardioMode = 'avg'; const f = document.getElementById('manualAddForm'); if (f) { f.style.display = 'none'; f.innerHTML = ''; } renderExerciseDetail(id); showView('viewExercise'); }
+function openExerciseDetail(id) { detailExerciseId = id; chartHidden = { left: false, right: false }; chartStatHidden = { min: false, avg: false, max: false }; cardioMode = 'avg'; editingSessionId = null; const f = document.getElementById('manualAddForm'); if (f) { f.style.display = 'none'; f.innerHTML = ''; } renderExerciseDetail(id); showView('viewExercise'); }
 
 function renderExerciseDetail(id) {
   const ex = getExercise(id);
@@ -955,7 +953,12 @@ function renderExerciseDetail(id) {
     <div><div style="font-size:1.4rem;font-weight:700;">${st.currentWeight || '—'}${st.currentWeight ? ' kg' : ''}</div><div style="font-size:0.7rem;color:var(--muted);">huidig</div></div>
     <div><div style="font-size:0.9rem;font-weight:700;">${fmtDate(st.lastDate)}</div><div style="font-size:0.7rem;color:var(--muted);">laatst</div></div>`;
 
-  // Recent sessions for this exercise
+  renderProgressChart(id);
+}
+
+// Formatted set breakdown of one logged exercise, used in the chart-point detail.
+// Per-side exercises are grouped L / R; others are a flat set list.
+function sessionSetDetail(ex, e) {
   const isCardio = ex.type === 'cardio';
   const fmtSet = x => {
     if (x.speed != null) {
@@ -965,32 +968,16 @@ function renderExerciseDetail(id) {
     if (x.duration != null) return isCardio ? `${Math.round(x.duration / 60)} min` : `${x.duration}s`;
     return `${x.reps || 0}${x.weight ? '×' + x.weight + 'kg' : ''}`;
   };
-  const rows = sessions
-    .filter(s => (s.exercises || []).some(e => e.exerciseId === id))
-    .slice(0, 15)
-    .map(s => {
-      const e = s.exercises.find(x => x.exerciseId === id);
-      let detail;
-      if (ex.perSide) {
-        const left = [], right = [];
-        (e.sets || []).forEach((x, i) => {
-          const side = (x.side === 0 || x.side === 1) ? x.side : i % 2;
-          (side === 0 ? left : right).push(fmtSet(x));
-        });
-        detail = `<span style="color:${CHART_COL.left};font-weight:700;">L</span> ${esc(left.join(', ') || '–')} &nbsp; <span style="color:${CHART_COL.right};font-weight:700;">R</span> ${esc(right.join(', ') || '–')}`;
-      } else {
-        detail = esc((e.sets || []).map(fmtSet).join(', '));
-      }
-      const hrTxt = e.hrAvg ? ` <span style="color:#e74c3c;" title="gem/max hartslag">❤ ${e.hrAvg}${e.hrMax ? '/' + e.hrMax : ''}</span>` : '';
-      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;padding:0.4rem 0.6rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:0.3rem;font-size:0.8rem;">
-        <span><span style="font-family:var(--mono);color:var(--muted);">${fmtDate(s.date)}</span> — ${detail}${hrTxt}</span>
-        <button onclick="confirmDeleteLog('${s.id}')" title="Verwijder deze log" style="background:none;border:none;cursor:pointer;font-size:0.95rem;line-height:1;padding:0 0.1rem;flex-shrink:0;">🗑</button>
-      </div>`;
-    }).join('');
-  document.getElementById('exDetailSessions').innerHTML = rows ||
-    `<div style="color:var(--muted);font-size:0.85rem;">Nog geen sessies gelogd.</div>`;
-
-  renderProgressChart(id);   // Task 3.3
+  const sets = e.sets || [];
+  if (ex.perSide) {
+    const left = [], right = [];
+    sets.forEach((x, i) => {
+      const side = (x.side === 0 || x.side === 1) ? x.side : i % 2;
+      (side === 0 ? left : right).push(fmtSet(x));
+    });
+    return `<span style="color:${CHART_COL.left};font-weight:700;">L</span> ${esc(left.join(', ') || '–')} &nbsp; <span style="color:${CHART_COL.right};font-weight:700;">R</span> ${esc(right.join(', ') || '–')}`;
+  }
+  return esc(sets.map(fmtSet).join(', '));
 }
 
 const CHART_COL = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6' };
@@ -1191,9 +1178,20 @@ function showChartPoint(i) {
       `</div>`;
   }
 
-  const trash = p.id ? `<button onclick="confirmDeleteLog('${p.id}')" title="Verwijder deze log" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0 0.1rem;">🗑</button>` : '';
+  // Set breakdown of this session for the current exercise (replaces the old list).
+  const sessObj = loadHistory().find(s => s.id === p.id);
+  const exObj = getExercise(detailExerciseId);
+  const eObj = sessObj && (sessObj.exercises || []).find(x => x.exerciseId === detailExerciseId);
+  const setDetail = (exObj && eObj)
+    ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetDetail(exObj, eObj)}</div>`
+    : '';
+
+  const actions = p.id ? `<div style="display:flex;gap:0.35rem;flex-shrink:0;">
+      <button onclick="openEditLog('${p.id}')" title="Bewerk deze sessie" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0 0.1rem;">✏️</button>
+      <button onclick="confirmDeleteLog('${p.id}')" title="Verwijder deze sessie" style="background:none;border:none;cursor:pointer;font-size:1rem;line-height:1;padding:0 0.1rem;">🗑</button>
+    </div>` : '';
   el.style.cssText = 'margin-top:0.5rem;font-size:0.8rem;border:1px solid var(--border);background:var(--s1);border-radius:var(--r-sm);padding:0.5rem 0.65rem;';
-  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.15rem;"><span style="font-weight:700;color:var(--text);">${dateStr} · ${timeStr}</span>${trash}</div>${body}${cmp}`;
+  el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:0.5rem;margin-bottom:0.15rem;"><span style="font-weight:700;color:var(--text);">${dateStr} · ${timeStr}</span>${actions}</div>${body}${setDetail}${cmp}`;
 }
 
 function confirmDeleteLog(sessionId) {
@@ -1209,16 +1207,70 @@ function confirmDeleteLog(sessionId) {
 }
 
 let manualRows = [];
+let editingSessionId = null; // when set, the manual form edits this session instead of adding a new one
 
 function toggleManualAdd() {
   const f = document.getElementById('manualAddForm');
   if (!f) return;
   if (f.style.display === 'none') {
+    editingSessionId = null;
     manualRows = [{}];
     f.innerHTML = buildManualAddForm();
     f.style.display = '';
     renderManualRows();
-  } else { f.style.display = 'none'; f.innerHTML = ''; }
+  } else { f.style.display = 'none'; f.innerHTML = ''; editingSessionId = null; }
+}
+
+// Open the manual form pre-filled to edit an existing logged session.
+function openEditLog(sessionId) {
+  const ex = getExercise(detailExerciseId);
+  const sess = loadHistory().find(s => s.id === sessionId);
+  if (!ex || !sess) return;
+  const e = (sess.exercises || []).find(x => x.exerciseId === detailExerciseId);
+  if (!e) return;
+  editingSessionId = sessionId;
+  manualRows = setsToRows(ex, e);
+  const f = document.getElementById('manualAddForm');
+  if (!f) return;
+  f.innerHTML = buildManualAddForm();
+  f.style.display = '';
+  renderManualRows();
+  f.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// Reverse of saveManualLog: stored sets back into editable form rows. Per-side sets
+// are zipped back into one row holding both legs.
+function setsToRows(ex, e) {
+  const sets = e.sets || [];
+  if (ex.type === 'cardio') {
+    return sets.length ? sets.map(s => ({ durMin: s.duration ? Math.round(s.duration / 6) / 10 : '', speed: s.speed || 0 })) : [{}];
+  }
+  const isDur = window.Progress.metricForExercise(ex) === 'duration';
+  if (ex.perSide) {
+    const left = [], right = [];
+    sets.forEach((s, i) => { const side = (s.side === 0 || s.side === 1) ? s.side : i % 2; (side === 0 ? left : right).push(s); });
+    const rows = [];
+    for (let i = 0; i < Math.max(left.length, right.length); i++) {
+      const L = left[i], R = right[i];
+      if (isDur) rows.push({ durL: L ? L.duration ?? '' : '', durR: R ? R.duration ?? '' : '' });
+      else if (ex.weighted) rows.push({ weightL: L ? L.weight ?? '' : '', repsL: L ? L.reps ?? '' : '', weightR: R ? R.weight ?? '' : '', repsR: R ? R.reps ?? '' : '' });
+      else rows.push({ repsL: L ? L.reps ?? '' : '', repsR: R ? R.reps ?? '' : '' });
+    }
+    return rows.length ? rows : [{}];
+  }
+  return sets.length
+    ? sets.map(s => isDur ? ({ dur: s.duration ?? '' }) : (ex.weighted ? ({ weight: s.weight ?? '', reps: s.reps ?? '' }) : ({ reps: s.reps ?? '' })))
+    : [{}];
+}
+
+// Best-effort: carry sampled HR from the original sets onto the rebuilt ones, matched
+// by side and order, so editing weights/reps doesn't throw away the heart-rate curve.
+function carrySetHr(origSets, newSets) {
+  if (!origSets || !origSets.length) return;
+  const bySide = {};
+  origSets.forEach((s, i) => { const k = (s.side === 0 || s.side === 1) ? s.side : (s.side == null ? 'n' : i % 2); (bySide[k] = bySide[k] || []).push(s.hr || null); });
+  const idx = {};
+  newSets.forEach((s, i) => { const k = (s.side === 0 || s.side === 1) ? s.side : (s.side == null ? 'n' : i % 2); idx[k] = idx[k] || 0; const h = (bySide[k] || [])[idx[k]++]; if (h) s.hr = h; });
 }
 
 function setManualSpeedUnit(u) {
@@ -1263,11 +1315,12 @@ function manualColsFor(ex, isDur) {
 
 function buildManualAddForm() {
   const ex = getExercise(detailExerciseId);
-  const d = new Date(), pad = n => String(n).padStart(2, '0');
+  const editing = editingSessionId ? loadHistory().find(s => s.id === editingSessionId) : null;
+  const d = editing ? new Date(editing.date) : new Date(), pad = n => String(n).padStart(2, '0');
   const nowLocal = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const dateField = `<label style="display:block;">Datum &amp; tijd<input type="datetime-local" id="maDate" value="${nowLocal}" style="width:100%;margin-top:0.15rem;"></label>`;
   const buttons = `<div class="row" style="gap:0.5rem;margin-top:0.6rem;">
-      <button class="btn btn-sm btn-cyan" onclick="saveManualLog()">Opslaan</button>
+      <button class="btn btn-sm btn-cyan" onclick="saveManualLog()">${editing ? 'Bijwerken' : 'Opslaan'}</button>
       <button class="btn btn-sm" onclick="toggleManualAdd()">Annuleren</button>
     </div>`;
   let bodyFields;
@@ -1362,18 +1415,30 @@ function saveManualLog() {
     });
   }
   if (!sets.length) { alert('Vul minstens één set in'); return; }
-  window.DB.addSession({
-    id: crypto.randomUUID(),
-    date,
-    workoutId: null,
-    workoutName: 'Handmatig',
-    totalSeconds: 0,
-    exercises: [{
-      exerciseId: ex.id, name: ex.name, type: ex.type,
-      measureBy: ex.measureBy || null, weighted: !!ex.weighted, perSide: !!ex.perSide,
-      sets,
-    }],
-  });
+  const newEx = {
+    exerciseId: ex.id, name: ex.name, type: ex.type,
+    measureBy: ex.measureBy || null, weighted: !!ex.weighted, perSide: !!ex.perSide,
+    sets,
+  };
+  if (editingSessionId) {
+    // Update the existing session in place: replace this exercise, keep the others.
+    const orig = loadHistory().find(s => s.id === editingSessionId);
+    if (orig) {
+      const origEx = (orig.exercises || []).find(x => x.exerciseId === ex.id);
+      carrySetHr(origEx && origEx.sets, sets);
+      const agg = window.HR.combineHr(sets.map(s => s.hr));
+      if (agg) { newEx.hrAvg = agg.avg; newEx.hrMax = agg.max; }
+      const exercises = (orig.exercises || []).filter(x => x.exerciseId !== ex.id).concat([newEx]);
+      const session = { ...orig, date, exercises };
+      const sessHr = window.HR.combineHr(exercises.flatMap(x => (x.sets || []).map(s => s.hr)));
+      if (sessHr) { session.hrAvg = sessHr.avg; session.hrMax = sessHr.max; }
+      else { delete session.hrAvg; delete session.hrMax; }
+      window.DB.addSession(session);
+    }
+    editingSessionId = null;
+  } else {
+    window.DB.addSession({ id: crypto.randomUUID(), date, workoutId: null, workoutName: 'Handmatig', totalSeconds: 0, exercises: [newEx] });
+  }
   const f = document.getElementById('manualAddForm');
   if (f) { f.style.display = 'none'; f.innerHTML = ''; }
   renderExerciseDetail(detailExerciseId);

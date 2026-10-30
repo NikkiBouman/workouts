@@ -75,14 +75,24 @@ export function buildStatChart(series, opts) {
       const pts = ptStr(s.statKey, 'avg');
       if (pts.length) svg += `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash}"/>`;
     }
-    // Points for each visible stat (avg filled, min/max hollow).
-    visStats.forEach(k => series.forEach((p, i) => {
+    // Points per session: one circle per distinct value. A value is filled when it
+    // carries the avg, or when several stats coincide there — so a collapsed
+    // min = avg = max shows as a solid dot, never a hollow one.
+    series.forEach((p, i) => {
       const st = p[s.statKey];
       if (!st) return;
-      svg += k === 'avg'
-        ? `<circle cx="${x(i).toFixed(1)}" cy="${y(st.avg).toFixed(1)}" r="3.2" fill="${s.color}"/>`
-        : `<circle cx="${x(i).toFixed(1)}" cy="${y(st[k]).toFixed(1)}" r="2.2" fill="${colors.bg}" stroke="${s.color}" stroke-width="1.2"/>`;
-    }));
+      const byVal = new Map();
+      visStats.forEach(k => {
+        const key = st[k].toFixed(3);
+        if (!byVal.has(key)) byVal.set(key, { v: st[k], ks: [] });
+        byVal.get(key).ks.push(k);
+      });
+      byVal.forEach(({ v, ks }) => {
+        svg += (ks.includes('avg') || ks.length > 1)
+          ? `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="3.2" fill="${s.color}"/>`
+          : `<circle cx="${x(i).toFixed(1)}" cy="${y(v).toFixed(1)}" r="2.2" fill="${colors.bg}" stroke="${s.color}" stroke-width="1.2"/>`;
+      });
+    });
   });
 
   // Transparent full-height hit areas per session for tap-to-inspect.

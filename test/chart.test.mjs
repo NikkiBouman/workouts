@@ -39,6 +39,16 @@ test('showing only avg draws no band and one line per side', () => {
   assert.equal(count(svg, '<polyline'), 2);         // avg only, both sides
 });
 
+test('coincident min=avg=max draws a filled dot, not a hollow one', () => {
+  // one session, one set -> min = avg = max = 20 for all three stats
+  const sessions = [ { date: '2026-06-01T08:00:00.000Z', exercises: [
+    { exerciseId: 'sq', weighted: true, measureBy: 'reps', perSide: false, sets: [ { weight: 20, reps: 10 } ] } ] } ];
+  const series = seriesForExercise(sessions, 'sq', false, 'weight');
+  const { svg } = buildStatChart(series, { perSide: false, colors: COLORS, unit: ' kg' });
+  assert.equal(count(svg, 'stroke-width="1.2"'), 0);         // no hollow marker
+  assert.ok(count(svg, `fill="${COLORS.single}"`) >= 1);     // a solid dot is present
+});
+
 test('empty series yields empty svg', () => {
   const r = buildStatChart([], { perSide: false, colors: COLORS });
   assert.equal(r.svg, '');
