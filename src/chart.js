@@ -135,11 +135,11 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const th = (t, { color, span, h } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};${hide(h)}">${t}</th>`;
   const td = (t, h) => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);${hide(h)}">${t === '' ? '–' : t}</td>`;
   const blank = h => `<td style="padding:0.1rem 0.4rem;${hide(h)}"></td>`;
-  // Left↔right imbalance as a ± percentage, relative to their average. Empty if either missing.
+  // Left↔right imbalance as a percentage, relative to their average. Empty if either missing.
   const pctDiff = (a, b) => {
     if (a == null || b == null) return '';
     const m = (a + b) / 2;
-    return m === 0 ? '' : '±' + num(Math.round(Math.abs(a - b) / m * 1000) / 10) + '%';
+    return m === 0 ? '' : num(Math.round(Math.abs(a - b) / m * 1000) / 10) + '%';
   };
   const table = (head, body) => `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
@@ -184,7 +184,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     if (ex.weighted && !isDur) {
       const head =
         `<tr><th rowspan="2" style="${thBase}color:var(--muted);vertical-align:bottom;">#</th>` +
-        `${th('Links', { color: colLeft, span: 2, h: hL })}${th('±', { span: 2, h: hD })}${th('Rechts', { color: colRight, span: 2, h: hR })}</tr>` +
+        `${th('Links', { color: colLeft, span: 2, h: hL })}${th('Verschil', { span: 2, h: hD })}${th('Rechts', { color: colRight, span: 2, h: hR })}</tr>` +
         `<tr>${th('kg', { color: colLeft, h: hL })}${th('reps', { color: colLeft, h: hL })}${th('kg', { h: hD })}${th('reps', { h: hD })}${th('kg', { color: colRight, h: hR })}${th('reps', { color: colRight, h: hR })}</tr>`;
       const bodyData = bodyRows((l, r) => td(num(l && l.weight), hL) + td(num(l && l.reps), hL) + blank(hD) + blank(hD) + td(num(r && r.weight), hR) + td(num(r && r.reps), hR));
       const Lw = statFor(L, 'weight'), Lr = statFor(L, 'reps'), Rw = statFor(R, 'weight'), Rr = statFor(R, 'reps');
@@ -197,7 +197,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     const pick = isDur ? (s => s && s.duration) : (s => s && s.reps);
     const mk = isDur ? 'duration' : 'reps';
     const unit = isDur ? ' (s)' : '';
-    const head = `<tr>${th('#')}${th('Links' + unit, { color: colLeft, h: hL })}${th('±', { h: hD })}${th('Rechts' + unit, { color: colRight, h: hR })}</tr>`;
+    const head = `<tr>${th('#')}${th('Links' + unit, { color: colLeft, h: hL })}${th('Verschil', { h: hD })}${th('Rechts' + unit, { color: colRight, h: hR })}</tr>`;
     const bodyData = bodyRows((l, r) => td(num(pick(l)), hL) + blank(hD) + td(num(pick(r)), hR));
     const Ls = statFor(L, mk), Rs = statFor(R, mk);
     const sumRows = visStats.map((k, i) => sumRow(k, i, (kk, cell, fv) => {
@@ -243,7 +243,16 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
   const hidden = opts.hidden || {};
   const basis = opts.basis || 'gemiddelde';
-  const hideFor = side => (side && hidden[side]) ? 'visibility:hidden;' : '';
+  const hideFor = side => {
+    if (side === 'diff') return (hidden.left || hidden.right) ? 'visibility:hidden;' : '';
+    return (side && hidden[side]) ? 'visibility:hidden;' : '';
+  };
+  // Left↔right imbalance of one session (relative to their average), as a plain %.
+  const diffPct = (a, b) => {
+    if (a == null || b == null) return '–';
+    const m = (a + b) / 2;
+    return m === 0 ? '–' : (Math.round(Math.abs(a - b) / m * 1000) / 10).toString().replace('.', ',') + '%';
+  };
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
   const thC = (t, color, span, h) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};${h}">${t}</th>`;
   const head = (groups && groups.length)
@@ -253,9 +262,14 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
   const body = rows.map(idx => {
     const r = series[idx];
     const isSel = idx === i;
-    const cells = cols.map(c => isSel
-      ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">—</td>`
-      : `<td style="padding:0.12rem 0.4rem;text-align:center;${hideFor(c.side)}">${badge(pct(c.value(r), c.value(sel)))}</td>`).join('');
+    const cells = cols.map(c => {
+      if (c.kind === 'diff') {
+        return `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">${diffPct(c.valueL(r), c.valueR(r))}</td>`;
+      }
+      return isSel
+        ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">—</td>`
+        : `<td style="padding:0.12rem 0.4rem;text-align:center;${hideFor(c.side)}">${badge(pct(c.value(r), c.value(sel)))}</td>`;
+    }).join('');
     const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
     const numStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
     return `<tr style="${rowStyle}"><td title="${dLab(r.date)}" style="padding:0.12rem 0.4rem;text-align:center;font-size:0.72rem;${numStyle}">${idx + 1}</td>${cells}</tr>`;
@@ -280,15 +294,22 @@ export function comparisonColumns(ex, opts = {}) {
       cols: [
         { label: 'kg', color: colLeft, side: 'left', value: pt => stat(pt.statLeft) },
         { label: 'reps', color: colLeft, side: 'left', value: pt => stat(pt.repsStatLeft) },
+        { label: 'kg', kind: 'diff', side: 'diff', valueL: pt => stat(pt.statLeft), valueR: pt => stat(pt.statRight) },
+        { label: 'reps', kind: 'diff', side: 'diff', valueL: pt => stat(pt.repsStatLeft), valueR: pt => stat(pt.repsStatRight) },
         { label: 'kg', color: colRight, side: 'right', value: pt => stat(pt.statRight) },
         { label: 'reps', color: colRight, side: 'right', value: pt => stat(pt.repsStatRight) },
       ],
-      groups: [{ label: 'Links', color: colLeft, side: 'left', span: 2 }, { label: 'Rechts', color: colRight, side: 'right', span: 2 }],
+      groups: [
+        { label: 'Links', color: colLeft, side: 'left', span: 2 },
+        { label: 'Verschil', side: 'diff', span: 2 },
+        { label: 'Rechts', color: colRight, side: 'right', span: 2 },
+      ],
     };
   }
   if (ex.perSide) {
     return { cols: [
       { label: 'Links', color: colLeft, side: 'left', value: pt => stat(pt.statLeft) },
+      { label: 'Verschil', kind: 'diff', side: 'diff', valueL: pt => stat(pt.statLeft), valueR: pt => stat(pt.statRight) },
       { label: 'Rechts', color: colRight, side: 'right', value: pt => stat(pt.statRight) },
     ] };
   }

@@ -126,8 +126,8 @@ test('comparisonColumns: per-side weighted gives 4 grouped columns; statKey driv
     { date: '2026-09-08T08:00:00.000Z', statLeft: { min: 16, avg: 17, max: 18 }, statRight: { min: 12, avg: 13, max: 14 }, repsStatLeft: { min: 8, avg: 9, max: 10 }, repsStatRight: { min: 8, avg: 9, max: 10 } },
   ];
   const avg = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight', statKey: 'avg' });
-  assert.equal(avg.cols.length, 4);
-  assert.deepEqual(avg.groups.map(g => g.label), ['Links', 'Rechts']);
+  assert.equal(avg.cols.length, 6); // L kg/reps + Verschil kg/reps + R kg/reps
+  assert.deepEqual(avg.groups.map(g => g.label), ['Links', 'Verschil', 'Rechts']);
   const htmlAvg = comparisonTableHtml(series, 1, avg.cols, { groups: avg.groups, basis: 'gemiddelde' });
   assert.ok(htmlAvg.includes('op basis van gemiddelde'));
   assert.ok(htmlAvg.includes('-11,8%'));   // L kg avg: (15-17)/17
@@ -157,12 +157,13 @@ test('sessionSetTableHtml: a hidden side blanks its columns (kept, not removed)'
   assert.ok(html.includes('Links') && html.includes('Rechts'));
 });
 
-test('sessionSetTableHtml: per-side summary has a ± L/R difference column', () => {
+test('sessionSetTableHtml: per-side summary has a Verschil L/R column (plain %)', () => {
   const ex = { type: 'strength', perSide: true, weighted: true, measureBy: 'reps' };
   const sets = [{ weight: 18, reps: 10, side: 0 }, { weight: 14, reps: 10, side: 1 }];
   const html = sessionSetTableHtml(ex, sets, { colLeft: '#00f', colRight: '#f80' });
-  assert.ok(html.includes('±25%'));  // kg: |18-14| / ((18+14)/2) = 4/16 = 25%
-  assert.ok(html.includes('±0%'));   // reps equal
+  assert.ok(html.includes('Verschil'));
+  assert.ok(html.includes('>25%</td>'));  // kg: |18-14| / ((18+14)/2) = 4/16 = 25%, no ± prefix
+  assert.ok(!html.includes('±'));          // ± prefix removed
 });
 
 test('sessionSetTableHtml: hiding a stat drops that summary row', () => {
