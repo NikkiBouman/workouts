@@ -1232,8 +1232,9 @@ function openEditLog(sessionId) {
 // are zipped back into one row holding both legs.
 function setsToRows(ex, e) {
   const sets = e.sets || [];
+  const hrOf = s => (s && s.hr && typeof s.hr.avg === 'number') ? s.hr.avg : '';
   if (ex.type === 'cardio') {
-    return sets.length ? sets.map(s => ({ durMin: s.duration ? Math.round(s.duration / 6) / 10 : '', speed: s.speed || 0 })) : [{}];
+    return sets.length ? sets.map(s => ({ durMin: s.duration ? Math.round(s.duration / 6) / 10 : '', speed: s.speed || 0, hr: hrOf(s) })) : [{}];
   }
   const isDur = window.Progress.metricForExercise(ex) === 'duration';
   if (ex.perSide) {
@@ -1242,25 +1243,35 @@ function setsToRows(ex, e) {
     const rows = [];
     for (let i = 0; i < Math.max(left.length, right.length); i++) {
       const L = left[i], R = right[i];
-      if (isDur) rows.push({ durL: L ? L.duration ?? '' : '', durR: R ? R.duration ?? '' : '' });
-      else if (ex.weighted) rows.push({ weightL: L ? L.weight ?? '' : '', repsL: L ? L.reps ?? '' : '', weightR: R ? R.weight ?? '' : '', repsR: R ? R.reps ?? '' : '' });
-      else rows.push({ repsL: L ? L.reps ?? '' : '', repsR: R ? R.reps ?? '' : '' });
+      const hr = hrOf(L) || hrOf(R); // one HR per row covers both legs
+      if (isDur) rows.push({ durL: L ? L.duration ?? '' : '', durR: R ? R.duration ?? '' : '', hr });
+      else if (ex.weighted) rows.push({ weightL: L ? L.weight ?? '' : '', repsL: L ? L.reps ?? '' : '', weightR: R ? R.weight ?? '' : '', repsR: R ? R.reps ?? '' : '', hr });
+      else rows.push({ repsL: L ? L.reps ?? '' : '', repsR: R ? R.reps ?? '' : '', hr });
     }
     return rows.length ? rows : [{}];
   }
   return sets.length
-    ? sets.map(s => isDur ? ({ dur: s.duration ?? '' }) : (ex.weighted ? ({ weight: s.weight ?? '', reps: s.reps ?? '' }) : ({ reps: s.reps ?? '' })))
+    ? sets.map(s => isDur ? ({ dur: s.duration ?? '', hr: hrOf(s) }) : (ex.weighted ? ({ weight: s.weight ?? '', reps: s.reps ?? '', hr: hrOf(s) }) : ({ reps: s.reps ?? '', hr: hrOf(s) })))
     : [{}];
 }
 
-// Best-effort: carry sampled HR from the original sets onto the rebuilt ones, matched
-// by side and order, so editing weights/reps doesn't throw away the heart-rate curve.
-function carrySetHr(origSets, newSets) {
+// When editing, reconcile each rebuilt set's HR with the original's, matched by side
+// and order. The rebuilt set already carries whatever the HR field shows (manually
+// typed, or the original avg pre-filled by setsToRows). If that value is unchanged
+// from the original's avg, restore the original hr so its rich live samples — and the
+// fine-grained curve — survive the edit. A changed value keeps the manual one; a
+// cleared field drops HR for that set.
+function reconcileEditHr(origSets, newSets) {
   if (!origSets || !origSets.length) return;
+  const keyOf = (s, i) => (s.side === 0 || s.side === 1) ? s.side : (s.side == null ? 'n' : i % 2);
   const bySide = {};
-  origSets.forEach((s, i) => { const k = (s.side === 0 || s.side === 1) ? s.side : (s.side == null ? 'n' : i % 2); (bySide[k] = bySide[k] || []).push(s.hr || null); });
+  origSets.forEach((s, i) => { const k = keyOf(s, i); (bySide[k] = bySide[k] || []).push(s.hr || null); });
   const idx = {};
-  newSets.forEach((s, i) => { const k = (s.side === 0 || s.side === 1) ? s.side : (s.side == null ? 'n' : i % 2); idx[k] = idx[k] || 0; const h = (bySide[k] || [])[idx[k]++]; if (h) s.hr = h; });
+  newSets.forEach((s, i) => {
+    const k = keyOf(s, i); idx[k] = idx[k] || 0;
+    const origHr = (bySide[k] || [])[idx[k]++];
+    if (origHr && s.hr && Math.round(origHr.avg) === s.hr.avg) s.hr = origHr;
+  });
 }
 
 function setManualSpeedUnit(u) {
@@ -1279,6 +1290,7 @@ function manualColsFor(ex, isDur) {
   if (ex.type === 'cardio') {
     const cols = [{ key: 'durMin', kind: 'num', label: 'Duur (min)', w: 80 }];
     if (ex.bleConnectable) cols.push({ key: 'speed', kind: 'speed', label: speedUnit === 'pace' ? 'min/km' : 'km/h', w: 72 });
+    cols.push({ key: 'hr', label: '❤', w: 64 });
     return cols;
   }
   const cols = [];
@@ -1300,6 +1312,7 @@ function manualColsFor(ex, isDur) {
     if (ex.weighted) cols.push({ key: 'weight', label: 'kg', step: '0.5', w: 64 });
     cols.push({ key: 'reps', label: 'Reps', w: 64 });
   }
+  cols.push({ key: 'hr', label: '❤', w: 64 });
   return cols;
 }
 
@@ -1355,7 +1368,9 @@ function renderManualRows() {
           ? `<input type="text" placeholder="5:30" value="${row.speed > 0 ? kmhToPace(row.speed) : ''}" onchange="updateManualSpeed(${i},this.value)" title="min/km" style="width:${col.w}px;">`
           : `<input type="number" min="0" step="0.1" placeholder="10.5" value="${row.speed > 0 ? row.speed : ''}" onchange="updateManualSpeed(${i},this.value)" title="km/h" style="width:${col.w}px;">`;
       }
-      return `<input type="number" inputmode="decimal" step="${col.step || '1'}" min="0" placeholder="${col.label}" value="${row[col.key] ?? ''}" oninput="updateManualRow(${i},'${col.key}',this.value)" title="${col.label}" style="width:${col.w}px;">`;
+      const ph = col.key === 'hr' ? 'bpm' : col.label;
+      const ttl = col.key === 'hr' ? 'Hartslag (bpm)' : col.label;
+      return `<input type="number" inputmode="decimal" step="${col.step || '1'}" min="0" placeholder="${ph}" value="${row[col.key] ?? ''}" oninput="updateManualRow(${i},'${col.key}',this.value)" title="${ttl}" style="width:${col.w}px;">`;
     }).join('');
     return `<div class="row" style="gap:0.3rem;align-items:center;margin-bottom:0.25rem;">
       <span style="color:var(--muted);font-size:0.68rem;width:34px;flex-shrink:0;">Set ${i + 1}</span>
@@ -1379,28 +1394,37 @@ function saveManualLog() {
   const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
   let sets = [];
   if (ex.type === 'cardio') {
+    let offset = 0; // seconds from the exercise start — places each block on the HR curve
     manualRows.forEach(row => {
       const mins = num(row.durMin);
       if (mins == null || mins <= 0) return;
-      sets.push({ weight: null, reps: null, duration: Math.round(mins * 60), speed: (ex.bleConnectable && row.speed > 0) ? row.speed : null, side: null });
+      const dur = Math.round(mins * 60);
+      const set = { weight: null, reps: null, duration: dur, speed: (ex.bleConnectable && row.speed > 0) ? row.speed : null, side: null };
+      const hr = window.HR.manualHr(num(row.hr), { startOffsetSec: offset, durationSec: dur });
+      if (hr) set.hr = hr; // flat segment over the block -> stepped curve
+      sets.push(set);
+      offset += dur;
     });
   } else {
     const isDur = window.Progress.metricForExercise(ex) === 'duration';
     manualRows.forEach(row => {
       const w = (ex.weighted && !isDur) ? (num(row.weight) || 0) : null;
+      const hr = window.HR.manualHr(num(row.hr)); // strength: no time axis -> avg/max only, no curve
       if (isDur) {
         const l = num(row.durL), r = num(row.durR), d2 = num(row.dur);
-        if (ex.perSide) { if (l != null) sets.push({ weight: null, reps: null, duration: l, side: 0 }); if (r != null) sets.push({ weight: null, reps: null, duration: r, side: 1 }); }
-        else if (d2 != null) sets.push({ weight: null, reps: null, duration: d2, side: null });
+        if (ex.perSide) {
+          if (l != null) { const s = { weight: null, reps: null, duration: l, side: 0 }; if (hr) s.hr = hr; sets.push(s); }
+          if (r != null) { const s = { weight: null, reps: null, duration: r, side: 1 }; if (hr) s.hr = hr; sets.push(s); }
+        } else if (d2 != null) { const s = { weight: null, reps: null, duration: d2, side: null }; if (hr) s.hr = hr; sets.push(s); }
       } else if (ex.perSide) {
         const l = num(row.repsL), r = num(row.repsR);
         const wL = ex.weighted ? (num(row.weightL) || 0) : null;
         const wR = ex.weighted ? (num(row.weightR) || 0) : null;
-        if (l != null) sets.push({ weight: wL, reps: l, duration: null, side: 0 });
-        if (r != null) sets.push({ weight: wR, reps: r, duration: null, side: 1 });
+        if (l != null) { const s = { weight: wL, reps: l, duration: null, side: 0 }; if (hr) s.hr = hr; sets.push(s); }
+        if (r != null) { const s = { weight: wR, reps: r, duration: null, side: 1 }; if (hr) s.hr = hr; sets.push(s); }
       } else {
         const rp = num(row.reps);
-        if (rp != null) sets.push({ weight: w, reps: rp, duration: null, side: null });
+        if (rp != null) { const s = { weight: w, reps: rp, duration: null, side: null }; if (hr) s.hr = hr; sets.push(s); }
       }
     });
   }
@@ -1415,9 +1439,9 @@ function saveManualLog() {
     const orig = loadHistory().find(s => s.id === editingSessionId);
     if (orig) {
       const origEx = (orig.exercises || []).find(x => x.exerciseId === ex.id);
-      carrySetHr(origEx && origEx.sets, sets);
+      reconcileEditHr(origEx && origEx.sets, sets);
       const agg = window.HR.combineHr(sets.map(s => s.hr));
-      if (agg) { newEx.hrAvg = agg.avg; newEx.hrMax = agg.max; }
+      if (agg) { newEx.hrAvg = agg.avg; newEx.hrMax = agg.max; } else { delete newEx.hrAvg; delete newEx.hrMax; }
       const exercises = (orig.exercises || []).filter(x => x.exerciseId !== ex.id).concat([newEx]);
       const session = { ...orig, date, exercises };
       const sessHr = window.HR.combineHr(exercises.flatMap(x => (x.sets || []).map(s => s.hr)));
@@ -1427,7 +1451,11 @@ function saveManualLog() {
     }
     editingSessionId = null;
   } else {
-    window.DB.addSession({ id: crypto.randomUUID(), date, workoutId: null, workoutName: 'Handmatig', totalSeconds: 0, exercises: [newEx] });
+    const agg = window.HR.combineHr(sets.map(s => s.hr));
+    if (agg) { newEx.hrAvg = agg.avg; newEx.hrMax = agg.max; }
+    const session = { id: crypto.randomUUID(), date, workoutId: null, workoutName: 'Handmatig', totalSeconds: 0, exercises: [newEx] };
+    if (agg) { session.hrAvg = agg.avg; session.hrMax = agg.max; }
+    window.DB.addSession(session);
   }
   const f = document.getElementById('manualAddForm');
   if (f) { f.style.display = 'none'; f.innerHTML = ''; }
@@ -2159,7 +2187,7 @@ async function startRunner() {
   showView('viewRunner');
   document.getElementById('runBtnStop').disabled = false;
   // Restore strength UI buttons (may have been replaced by finish screen)
-  document.getElementById('strActions').innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+  document.getElementById('strActions').innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
   await startCurrentEntry();
 }
 
@@ -2235,7 +2263,7 @@ function showEntryPrompt(title, subtitle, buttons) {
         const choice = actions.dataset.choice;
         delete actions.dataset.choice;
         // Restore buttons
-        actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartTimer()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+        actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
         resolve(choice);
       }
     }, 100);

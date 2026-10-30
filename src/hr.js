@@ -17,13 +17,31 @@ export function hrStats(samples) {
 
 // Pool the samples from several hr objects (each {samples} or null/undefined) and
 // aggregate them together. Pooling raw samples — not averaging the averages — keeps
-// the mean correctly weighted by how many samples each segment contributed.
+// the mean correctly weighted by how many samples each segment contributed. An hr
+// object with no samples but a numeric avg (a manually-entered value) counts as one
+// point, so hand-typed HR still rolls up into exercise/session averages.
 export function combineHr(hrList) {
   const pooled = [];
   for (const h of hrList || []) {
     if (h && h.samples && h.samples.length) pooled.push(...h.samples);
+    else if (h && typeof h.avg === 'number') pooled.push([0, h.avg]);
   }
   return hrStats(pooled);
+}
+
+// Build an hr object from a single manually-entered bpm. Cardio blocks pass
+// startOffsetSec + durationSec so the value becomes a flat segment on the workout
+// curve ([[0,b],[dur,b]]); strength sets omit both, so they feed avg/max only and
+// never reach buildHrCurve. Returns null for empty/invalid input.
+export function manualHr(bpm, { startOffsetSec = null, durationSec = null } = {}) {
+  const b = Math.round(bpm);
+  if (!Number.isFinite(b) || b <= 0) return null;
+  const hr = { avg: b, max: b, min: b };
+  if (startOffsetSec != null) {
+    hr.startOffsetSec = startOffsetSec;
+    hr.samples = durationSec > 0 ? [[0, b], [durationSec, b]] : [[0, b]];
+  }
+  return hr;
 }
 
 // Build a per-set hr object from a segment's samples. startOffsetSec = seconds from

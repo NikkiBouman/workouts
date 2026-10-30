@@ -25,7 +25,7 @@ export function signOut() { return Promise.resolve(); }
 export async function start(user, defaults /*, defaultsVersion */) {
   cache.exercises = (defaults || []).map(ex => ({ ...ex }));
   cache.workouts = demoWorkouts();
-  cache.sessions = [];
+  cache.sessions = demoSessions();
   changeCb();
 }
 
@@ -74,5 +74,32 @@ function demoWorkouts() {
         { type: 'segment', mode: 'time', duration: 60,  distance: 0, speed: 5,  incline: 0 },
       ] },
     ],
+  }];
+}
+
+// One manually-logged treadmill run carrying a heart-rate value per block, so the
+// history shows the ❤ avg/max and the stepped HR curve immediately on load. Each
+// block's hr mirrors what the app's manualHr() builds: a flat [[0,bpm],[dur,bpm]]
+// segment at its offset from the start. Also lets you re-open it via the ❤ to edit.
+function demoSessions() {
+  const seg = (dur, bpm, offset) => ({ avg: bpm, max: bpm, min: bpm, startOffsetSec: offset, samples: [[0, bpm], [dur, bpm]] });
+  return [{
+    id: 'demo_session_hr',
+    date: '2026-10-29T18:30:00.000Z',
+    workoutId: null,
+    workoutName: 'Handmatig',
+    totalSeconds: 660,
+    hrAvg: 119, hrMax: 150,
+    exercises: [{
+      exerciseId: 'ex_hardlopen', name: 'Hardlopen', type: 'cardio',
+      measureBy: null, weighted: false, perSide: false,
+      hrAvg: 119, hrMax: 150,
+      sets: [
+        { weight: null, reps: null, duration: 300, speed: 5,  side: null, hr: seg(300, 95,  0) },
+        { weight: null, reps: null, duration: 120, speed: 8,  side: null, hr: seg(120, 120, 300) },
+        { weight: null, reps: null, duration: 60,  speed: 12, side: null, hr: seg(60,  150, 420) },
+        { weight: null, reps: null, duration: 180, speed: 6,  side: null, hr: seg(180, 110, 480) },
+      ],
+    }],
   }];
 }
