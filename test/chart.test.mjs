@@ -101,21 +101,23 @@ test('comparisonTableHtml: tapped point is the pivot; refs show % vs it, chronol
     { date: '2026-09-08T08:00:00.000Z', statAll: { avg: 12 }, repsAvg: 10 },
     { date: '2026-09-15T08:00:00.000Z', statAll: { avg: 15 }, repsAvg: 9 },
   ];
-  const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }, { label: 'reps', value: p => p.repsAvg }];
-  const html = comparisonTableHtml(series, 1, metrics); // tap the middle (12 kg)
-  assert.ok(html.includes('Eerste keer') && html.includes('Dit punt') && html.includes('Volgende keer'));
+  const cols = [{ label: 'gewicht', value: p => p.statAll.avg }, { label: 'reps', value: p => p.repsAvg }];
+  const html = comparisonTableHtml(series, 1, cols); // tap the middle (12 kg)
+  assert.ok(!html.includes('Dit punt')); // text labels replaced by session numbers
+  assert.ok(html.includes('box-shadow:inset 3px 0 0')); // chosen point highlighted
   assert.ok(html.includes('+25%'));   // later weight: (15-12)/12 = +25 (green, future)
   assert.ok(html.includes('var(--green)') && html.includes('var(--red)'));
-  // 'Dit punt' sits between history (above) and future (below)
-  assert.ok(html.indexOf('Eerste keer') < html.indexOf('Dit punt'));
-  assert.ok(html.indexOf('Dit punt') < html.indexOf('Volgende keer'));
+  // first column shows the session ordinals 1,2,3 in chronological order
+  assert.ok(html.includes('>1</td>') && html.includes('>2</td>') && html.includes('>3</td>'));
+  assert.ok(html.indexOf('>1</td>') < html.indexOf('>2</td>'));
+  assert.ok(html.indexOf('>2</td>') < html.indexOf('>3</td>'));
 });
 
-test('comparisonTableHtml: all five labels appear when tapping a middle session', () => {
+test('comparisonTableHtml: first column shows session ordinals (1..5) when tapping a middle session', () => {
   const series = [10, 11, 12, 13, 14].map((w, k) => ({ date: `2026-09-0${k + 1}T08:00:00.000Z`, statAll: { avg: w }, repsAvg: 8 }));
-  const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }];
-  const html = comparisonTableHtml(series, 2, metrics); // tap the 3rd of 5
-  ['Eerste keer', 'Vorige keer', 'Dit punt', 'Volgende keer', 'Recentste keer'].forEach(l => assert.ok(html.includes(l), l));
+  const cols = [{ label: 'gewicht', value: p => p.statAll.avg }];
+  const html = comparisonTableHtml(series, 2, cols); // tap the 3rd of 5
+  ['>1</td>', '>2</td>', '>3</td>', '>4</td>', '>5</td>'].forEach(nr => assert.ok(html.includes(nr), nr));
 });
 
 test('comparisonColumns: per-side weighted yields 4 columns grouped Links/Rechts', () => {

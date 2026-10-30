@@ -131,7 +131,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;text-align:center;';
   const th = (t, { color, span } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};">${t}</th>`;
   const td = t => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);">${t === '' ? '–' : t}</td>`;
-  const table = (head, body) => `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  const table = (head, body) => `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
 
   // Bold min/gem/max summary rows. Each column's stat object comes from statFor; the
@@ -198,14 +198,10 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
 
   const seen = new Set();
   const rows = [];
-  const add = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); rows.push({ idx, label }); } };
-  add(i, 'Dit punt');
-  add(0, 'Eerste keer');
-  add(i - 1, 'Vorige keer');
-  add(i + 1, 'Volgende keer');
-  add(n - 1, 'Recentste keer');
+  const add = idx => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); rows.push(idx); } };
+  add(i); add(0); add(i - 1); add(i + 1); add(n - 1);
   if (rows.length < 2) return '';
-  rows.sort((a, b) => a.idx - b.idx); // chronological: history on top, future below
+  rows.sort((a, b) => a - b); // chronological: history on top, future below
 
   const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
   const badge = v => {
@@ -218,22 +214,22 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
   const thC = (t, color, span) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};">${t}</th>`;
   const head = (groups && groups.length)
-    ? `<tr><th rowspan="2" style="${thBase}text-align:left;vertical-align:bottom;color:var(--muted);">wanneer</th>${groups.map(g => thC(g.label, g.color, g.span)).join('')}</tr>`
+    ? `<tr><th rowspan="2" style="${thBase}text-align:center;vertical-align:bottom;color:var(--muted);">keer</th>${groups.map(g => thC(g.label, g.color, g.span)).join('')}</tr>`
       + `<tr>${cols.map(c => thC(c.label, c.color)).join('')}</tr>`
-    : `<tr><th style="${thBase}text-align:left;color:var(--muted);">wanneer</th>${cols.map(c => thC(c.label, c.color)).join('')}</tr>`;
-  const body = rows.map(({ idx, label }) => {
+    : `<tr>${thC('keer')}${cols.map(c => thC(c.label, c.color)).join('')}</tr>`;
+  const body = rows.map(idx => {
     const r = series[idx];
     const isSel = idx === i;
     const cells = cols.map(c => isSel
       ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);">—</td>`
       : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(c.value(r), c.value(sel)))}</td>`).join('');
     const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
-    const lblStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
-    return `<tr style="${rowStyle}"><td style="padding:0.12rem 0.4rem;text-align:left;font-size:0.72rem;${lblStyle}white-space:nowrap;">${label} <span style="opacity:0.6;">${dLab(r.date)}</span></td>${cells}</tr>`;
+    const numStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
+    return `<tr style="${rowStyle}"><td title="${dLab(r.date)}" style="padding:0.12rem 0.4rem;text-align:center;font-size:0.72rem;${numStyle}">${idx + 1}</td>${cells}</tr>`;
   }).join('');
   return `<div style="margin-top:0.5rem;border-top:1px solid var(--border);padding-top:0.35rem;">`
-    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(t.o.v. dit punt)</span></div>`
-    + `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;font-family:var(--mono);"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(t.o.v. dit punt · nr = hoeveelste keer)</span></div>`
+    + `<table style="width:100%;table-layout:fixed;border-collapse:collapse;font-size:0.76rem;"><colgroup><col style="width:2.8em;"></colgroup><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
 }
 
 // Column spec for the comparison table, matching the set table's shape for this
