@@ -131,9 +131,11 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const num = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
   const favg = v => (v == null) ? '' : num(Math.round(v * 10) / 10);
   const hide = h => h ? 'visibility:hidden;' : '';
-  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;text-align:center;';
-  const th = (t, { color, span, h } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};${hide(h)}">${t}</th>`;
-  const td = (t, h) => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);${hide(h)}">${t === '' ? '–' : t}</td>`;
+  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
+  // Data headers right-align (so numbers line up); group headers (span) stay centered.
+  const th = (t, { color, span, h, align } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:${align || (span ? 'center' : 'right')};color:${color || 'var(--muted)'};${hide(h)}">${t}</th>`;
+  const td = (t, h) => `<td style="padding:0.1rem 0.4rem;text-align:right;font-family:var(--mono);${hide(h)}">${t === '' ? '–' : t}</td>`;
+  const tdIdx = t => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);color:var(--muted);">${t}</td>`;
   const blank = h => `<td style="padding:0.1rem 0.4rem;${hide(h)}"></td>`;
   // Left↔right imbalance as a percentage, relative to their average. Empty if either missing.
   const pctDiff = (a, b) => {
@@ -150,18 +152,18 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const summary = cols => visStats.map((k, i) => {
     const bt = i === 0 ? 'border-top:2px solid var(--border);' : '';
     const lbl = k === 'avg' ? 'gem' : k;
-    const base = `padding:0.12rem 0.4rem;text-align:center;font-weight:700;${bt}`;
+    const base = `padding:0.12rem 0.4rem;font-weight:700;${bt}`;
     const cells = cols.map(c => {
       const v = c.stat ? (k === 'avg' ? favg(c.stat.avg) : num(c.stat[k])) : '';
-      return `<td style="${base}font-family:var(--mono);${hide(c.h)}">${v === '' ? '–' : v}</td>`;
+      return `<td style="${base}text-align:right;font-family:var(--mono);${hide(c.h)}">${v === '' ? '–' : v}</td>`;
     }).join('');
-    return `<tr><td style="${base}color:var(--muted);">${lbl}</td>${cells}</tr>`;
+    return `<tr><td style="${base}text-align:center;color:var(--muted);">${lbl}</td>${cells}</tr>`;
   }).join('');
 
   if (ex.type === 'cardio') {
     const hasSpeed = sets.some(s => s.speed != null);
-    const head = `<tr>${th('#')}${th('min')}${hasSpeed ? th(speedUnit === 'pace' ? 'min/km' : 'km/h') : ''}</tr>`;
-    const body = sets.map((x, i) => `<tr>${td(i + 1)}${td(Math.round((x.duration || 0) / 60))}${hasSpeed ? td(x.speed != null ? (speedUnit === 'pace' ? kmhToPace(x.speed) : num(x.speed)) : '') : ''}</tr>`).join('');
+    const head = `<tr>${th('#', { align: 'center' })}${th('min')}${hasSpeed ? th(speedUnit === 'pace' ? 'min/km' : 'km/h') : ''}</tr>`;
+    const body = sets.map((x, i) => `<tr>${tdIdx(i + 1)}${td(Math.round((x.duration || 0) / 60))}${hasSpeed ? td(x.speed != null ? (speedUnit === 'pace' ? kmhToPace(x.speed) : num(x.speed)) : '') : ''}</tr>`).join('');
     return table(head, body);
   }
 
@@ -169,21 +171,21 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     const L = [], R = [];
     sets.forEach((x, i) => { const side = (x.side === 0 || x.side === 1) ? x.side : i % 2; (side === 0 ? L : R).push(x); });
     const n = Math.max(L.length, R.length);
-    const bodyRows = cells => Array.from({ length: n }, (_, i) => `<tr>${td(i + 1)}${cells(L[i], R[i])}</tr>`).join('');
+    const bodyRows = cells => Array.from({ length: n }, (_, i) => `<tr>${tdIdx(i + 1)}${cells(L[i], R[i])}</tr>`).join('');
 
     const hD = hL || hR; // the ± difference needs both sides, so hide it if either is off
-    // One summary row (min/gem/max) with L / ± / R cells for the given per-column stats.
+    // One summary row (min/gem/max) with L / Verschil / R cells for the given per-column stats.
     const sumRow = (k, i, cellsFn) => {
       const bt = i === 0 ? 'border-top:2px solid var(--border);' : '';
-      const base = `padding:0.12rem 0.4rem;text-align:center;font-weight:700;${bt}`;
-      const cell = (v, h) => `<td style="${base}font-family:var(--mono);${hide(h)}">${v === '' ? '–' : v}</td>`;
+      const base = `padding:0.12rem 0.4rem;font-weight:700;${bt}`;
+      const cell = (v, h) => `<td style="${base}text-align:right;font-family:var(--mono);${hide(h)}">${v === '' ? '–' : v}</td>`;
       const fv = v => v == null ? '' : (k === 'avg' ? favg(v) : num(v));
-      return `<tr><td style="${base}color:var(--muted);">${k === 'avg' ? 'gem' : k}</td>${cellsFn(k, cell, fv)}</tr>`;
+      return `<tr><td style="${base}text-align:center;color:var(--muted);">${k === 'avg' ? 'gem' : k}</td>${cellsFn(k, cell, fv)}</tr>`;
     };
 
     if (ex.weighted && !isDur) {
       const head =
-        `<tr><th rowspan="2" style="${thBase}color:var(--muted);vertical-align:bottom;">#</th>` +
+        `<tr><th rowspan="2" style="${thBase}text-align:center;color:var(--muted);vertical-align:bottom;">#</th>` +
         `${th('Links', { color: colLeft, span: 2, h: hL })}${th('Verschil', { span: 2, h: hD })}${th('Rechts', { color: colRight, span: 2, h: hR })}</tr>` +
         `<tr>${th('kg', { color: colLeft, h: hL })}${th('reps', { color: colLeft, h: hL })}${th('kg', { h: hD })}${th('reps', { h: hD })}${th('kg', { color: colRight, h: hR })}${th('reps', { color: colRight, h: hR })}</tr>`;
       const bodyData = bodyRows((l, r) => td(num(l && l.weight), hL) + td(num(l && l.reps), hL) + blank(hD) + blank(hD) + td(num(r && r.weight), hR) + td(num(r && r.reps), hR));
@@ -197,7 +199,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     const pick = isDur ? (s => s && s.duration) : (s => s && s.reps);
     const mk = isDur ? 'duration' : 'reps';
     const unit = isDur ? ' (s)' : '';
-    const head = `<tr>${th('#')}${th('Links' + unit, { color: colLeft, h: hL })}${th('Verschil', { h: hD })}${th('Rechts' + unit, { color: colRight, h: hR })}</tr>`;
+    const head = `<tr>${th('#', { align: 'center' })}${th('Links' + unit, { color: colLeft, h: hL })}${th('Verschil', { h: hD })}${th('Rechts' + unit, { color: colRight, h: hR })}</tr>`;
     const bodyData = bodyRows((l, r) => td(num(pick(l)), hL) + blank(hD) + td(num(pick(r)), hR));
     const Ls = statFor(L, mk), Rs = statFor(R, mk);
     const sumRows = visStats.map((k, i) => sumRow(k, i, (kk, cell, fv) => {
@@ -207,10 +209,10 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
     return table(head, bodyData + sumRows);
   }
 
-  const rows1 = cells => sets.map((x, i) => `<tr>${td(i + 1)}${cells(x)}</tr>`).join('');
-  if (isDur) return table(`<tr>${th('#')}${th('duur (s)')}</tr>`, rows1(x => td(num(x.duration))) + summary([{ stat: statFor(sets, 'duration') }]));
-  if (ex.weighted) return table(`<tr>${th('#')}${th('kg')}${th('reps')}</tr>`, rows1(x => td(num(x.weight)) + td(num(x.reps))) + summary([{ stat: statFor(sets, 'weight') }, { stat: statFor(sets, 'reps') }]));
-  return table(`<tr>${th('#')}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([{ stat: statFor(sets, 'reps') }]));
+  const rows1 = cells => sets.map((x, i) => `<tr>${tdIdx(i + 1)}${cells(x)}</tr>`).join('');
+  if (isDur) return table(`<tr>${th('#', { align: 'center' })}${th('duur (s)')}</tr>`, rows1(x => td(num(x.duration))) + summary([{ stat: statFor(sets, 'duration') }]));
+  if (ex.weighted) return table(`<tr>${th('#', { align: 'center' })}${th('kg')}${th('reps')}</tr>`, rows1(x => td(num(x.weight)) + td(num(x.reps))) + summary([{ stat: statFor(sets, 'weight') }, { stat: statFor(sets, 'reps') }]));
+  return table(`<tr>${th('#', { align: 'center' })}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([{ stat: statFor(sets, 'reps') }]));
 }
 
 // Comparison table around the tapped session (index i). Reference sessions —
@@ -254,21 +256,21 @@ export function comparisonTableHtml(series, i, cols, opts = {}) {
     return m === 0 ? '–' : (Math.round(Math.abs(a - b) / m * 1000) / 10).toString().replace('.', ',') + '%';
   };
   const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
-  const thC = (t, color, span, h) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};${h}">${t}</th>`;
+  const thC = (t, color, span, h, align) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:${align || (span ? 'center' : 'right')};color:${color || 'var(--muted)'};${h}">${t}</th>`;
   const head = (groups && groups.length)
     ? `<tr><th rowspan="2" style="${thBase}text-align:center;vertical-align:bottom;color:var(--muted);">punt</th>${groups.map(g => thC(g.label, g.color, g.span, hideFor(g.side))).join('')}</tr>`
       + `<tr>${cols.map(c => thC(c.label, c.color, null, hideFor(c.side))).join('')}</tr>`
-    : `<tr>${thC('punt')}${cols.map(c => thC(c.label, c.color, null, hideFor(c.side))).join('')}</tr>`;
+    : `<tr>${thC('punt', null, null, '', 'center')}${cols.map(c => thC(c.label, c.color, null, hideFor(c.side))).join('')}</tr>`;
   const body = rows.map(idx => {
     const r = series[idx];
     const isSel = idx === i;
     const cells = cols.map(c => {
       if (c.kind === 'diff') {
-        return `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">${diffPct(c.valueL(r), c.valueR(r))}</td>`;
+        return `<td style="padding:0.12rem 0.4rem;text-align:right;color:var(--muted);${hideFor(c.side)}">${diffPct(c.valueL(r), c.valueR(r))}</td>`;
       }
       return isSel
-        ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);${hideFor(c.side)}">—</td>`
-        : `<td style="padding:0.12rem 0.4rem;text-align:center;${hideFor(c.side)}">${badge(pct(c.value(r), c.value(sel)))}</td>`;
+        ? `<td style="padding:0.12rem 0.4rem;text-align:right;color:var(--muted);${hideFor(c.side)}">—</td>`
+        : `<td style="padding:0.12rem 0.4rem;text-align:right;${hideFor(c.side)}">${badge(pct(c.value(r), c.value(sel)))}</td>`;
     }).join('');
     const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
     const numStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
