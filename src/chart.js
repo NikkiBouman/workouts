@@ -63,10 +63,11 @@ export function buildStatChart(series, opts) {
     .filter(Boolean);
 
   visSides.forEach(s => {
-    // Shaded band between min and max (only when both bounds are shown).
-    if (!statHidden.min && !statHidden.max) {
-      const top = ptStr(s.statKey, 'max');
-      const bot = ptStr(s.statKey, 'min').reverse();
+    // Shaded band between the highest and lowest visible stat lines (min < avg < max).
+    // With min hidden it fills avg↔max; with max hidden, min↔avg; needs ≥2 lines.
+    if (visStats.length >= 2) {
+      const top = ptStr(s.statKey, visStats[visStats.length - 1]);
+      const bot = ptStr(s.statKey, visStats[0]).reverse();
       if (top.length) svg += `<polygon points="${top.concat(bot).join(' ')}" fill="${s.color}" fill-opacity="0.12" stroke="none"/>`;
     }
     // Min / max boundary lines: thin, dashed, faded.
@@ -127,9 +128,9 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const { colLeft = '#3b82f6', colRight = '#f59e0b', speedUnit = 'kmh', kmhToPace = v => String(v) } = opts;
   const num = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
   const favg = v => (v == null) ? '' : num(Math.round(v * 10) / 10);
-  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
-  const th = (t, { color, span, center } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};text-align:${center ? 'center' : 'right'};">${t}</th>`;
-  const td = t => `<td style="padding:0.1rem 0.4rem;text-align:right;font-family:var(--mono);">${t === '' ? '–' : t}</td>`;
+  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;text-align:center;';
+  const th = (t, { color, span } = {}) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}color:${color || 'var(--muted)'};">${t}</th>`;
+  const td = t => `<td style="padding:0.1rem 0.4rem;text-align:center;font-family:var(--mono);">${t === '' ? '–' : t}</td>`;
   const table = (head, body) => `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;"><thead>${head}</thead><tbody>${body}</tbody></table>`;
   const isDur = ex.measureBy === 'duration';
 
@@ -138,7 +139,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   const summary = cols => ['min', 'avg', 'max'].map((k, i) => {
     const bt = i === 0 ? 'border-top:2px solid var(--border);' : '';
     const lbl = k === 'avg' ? 'gem' : k;
-    const base = `padding:0.12rem 0.4rem;text-align:right;font-weight:700;${bt}`;
+    const base = `padding:0.12rem 0.4rem;text-align:center;font-weight:700;${bt}`;
     const cells = cols.map(c => {
       const v = c ? (k === 'avg' ? favg(c.avg) : num(c[k])) : '';
       return `<td style="${base}font-family:var(--mono);">${v === '' ? '–' : v}</td>`;
@@ -161,7 +162,7 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
 
     if (ex.weighted && !isDur) {
       const head =
-        `<tr><th rowspan="2" style="${thBase}color:var(--muted);text-align:right;vertical-align:bottom;">#</th>` +
+        `<tr><th rowspan="2" style="${thBase}color:var(--muted);vertical-align:bottom;">#</th>` +
         `${th('Links', { color: colLeft, span: 2, center: true })}${th('Rechts', { color: colRight, span: 2, center: true })}</tr>` +
         `<tr>${th('kg', { color: colLeft })}${th('reps', { color: colLeft })}${th('kg', { color: colRight })}${th('reps', { color: colRight })}</tr>`;
       const body = bodyRows((l, r) => td(num(l && l.weight)) + td(num(l && l.reps)) + td(num(r && r.weight)) + td(num(r && r.reps)))

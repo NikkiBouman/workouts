@@ -1132,17 +1132,10 @@ function showChartPoint(i) {
   const d = new Date(p.date);
   const dateStr = d.toLocaleDateString('nl-NL', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' });
   const timeStr = d.toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit' });
-  const u = chartMeta.unit;
-  const fmt = arr => (arr && arr.length) ? arr.map(v => v + u).join(', ') : '–';
-  let body;
-  if (chartMeta.mode === 'stat') {
-    const num = v => (Math.round(v * 10) / 10).toString().replace('.', ',');
-    const fmtStat = st => st ? `min <b>${num(st.min)}</b>${u} · gem <b>${num(st.avg)}</b>${u} · max <b>${num(st.max)}</b>${u}` : '–';
-    body = p.perSide
-      ? `<div><span style="color:${chartMeta.colLeft};font-weight:700;">● Links</span> ${fmtStat(p.statLeft)}</div>
-         <div><span style="color:${chartMeta.colRight};font-weight:700;">● Rechts</span> ${fmtStat(p.statRight)}</div>`
-      : `<div>${fmtStat(p.statAll)}</div>`;
-  } else if (chartMeta.metric === 'speed') {
+  // In stat mode the set table below already lists min/gem/max per side, so there is
+  // no inline summary line here; only the cardio/speed view keeps an inline readout.
+  let body = '';
+  if (chartMeta.metric === 'speed') {
     if (chartMeta.cardioMode === 'max') {
       const spd = p.speedMax || 0, durSec = p.speedMaxDur || 0;
       body = `<div>Max pace <b>${kmhToPace(spd)}</b> /km &nbsp;·&nbsp; ${spd.toFixed(1).replace('.', ',')} km/h</div>
@@ -1153,11 +1146,6 @@ function showChartPoint(i) {
       body = `<div>Gem. pace <b>${kmhToPace(spd)}</b> /km &nbsp;·&nbsp; ${spd.toFixed(1).replace('.', ',')} km/h</div>
               <div style="color:var(--muted);">${Math.round(durSec / 60)} min &nbsp;·&nbsp; ${distKm.toFixed(2).replace('.', ',')} km</div>`;
     }
-  } else if (p.perSide) {
-    body = `<div><span style="color:${chartMeta.colLeft};font-weight:700;">● Links</span> ${fmt(p.leftVals)}</div>
-            <div><span style="color:${chartMeta.colRight};font-weight:700;">● Rechts</span> ${fmt(p.rightVals)}</div>`;
-  } else {
-    body = `<div>${fmt(p.allVals)}</div>`;
   }
   // Comparisons vs other sessions (first / previous / next / most recent, deduped).
   const n = chartSeries.length;

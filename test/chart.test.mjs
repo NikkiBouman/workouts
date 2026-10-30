@@ -35,8 +35,14 @@ test('hiding the right side drops its band and lines', () => {
 
 test('showing only avg draws no band and one line per side', () => {
   const { svg } = build({ statHidden: { min: true, max: true } });
-  assert.equal(count(svg, '<polygon'), 0);          // band needs both min and max
+  assert.equal(count(svg, '<polygon'), 0);          // band needs >=2 visible lines
   assert.equal(count(svg, '<polyline'), 2);         // avg only, both sides
+});
+
+test('hiding min still fills a band (avg..max) per side', () => {
+  const { svg } = build({ statHidden: { min: true } });
+  assert.equal(count(svg, '<polygon'), 2);          // one avg..max band per side
+  assert.equal(count(svg, '<polyline'), 4);         // avg + max lines, both sides
 });
 
 test('coincident min=avg=max draws a filled dot, not a hollow one', () => {
