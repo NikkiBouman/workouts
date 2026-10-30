@@ -29,7 +29,7 @@
 
 <script type="module">
 import { seriesForExercise } from './src/progress.js';
-import { buildStatChart, sessionSetTableHtml, comparisonTableHtml } from './src/chart.js';
+import { buildStatChart, sessionSetTableHtml, comparisonTableHtml, comparisonColumns } from './src/chart.js';
 
 const CHART_COL = { left:'#3b82f6', right:'#f59e0b', single:'#8b5cf6' };
 const GRID = '#d8dee9', LABEL = '#8a97ab';
@@ -96,9 +96,8 @@ window.showChartPoint = i => {
     ? `<div style="margin-top:0.35rem;padding-top:0.3rem;border-top:1px solid var(--border);">${sessionSetTableHtml(ex, e.sets, { colLeft: CHART_COL.left, colRight: CHART_COL.right })}</div>`
     : '';
 
-  const cmp = comparisonTableHtml(seriesCache, i, ex.weighted
-    ? [{ label: 'gewicht', value: pt => pt.statAll.avg }, { label: 'reps', value: pt => pt.repsAvg }]
-    : [{ label: 'reps', value: pt => pt.statAll.avg }]);
+  const { cols, groups } = comparisonColumns(ex, { colLeft: CHART_COL.left, colRight: CHART_COL.right, metric: 'weight' });
+  const cmp = comparisonTableHtml(seriesCache, i, cols, { groups });
 
   el.innerHTML = `<b>${date}</b>${setDetail}${cmp}`;
 };

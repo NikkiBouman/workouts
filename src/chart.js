@@ -187,11 +187,14 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
 // first, previous, next, most recent — plus the tapped point itself are listed in
 // chronological order, so everything above the highlighted 'Dit punt' row is history
 // and everything below is the future. Each reference shows its value as a % of the
-// tapped point (green when higher, red when lower). metrics: [{ label, value }].
-export function comparisonTableHtml(series, i, metrics) {
+// tapped point (green when higher, red when lower). cols: [{ label, value, color }];
+// opts.groups: optional top header row [{ label, color, span }] to group columns
+// (mirrors the per-leg set table above).
+export function comparisonTableHtml(series, i, cols, opts = {}) {
   const n = (series || []).length;
   const sel = series && series[i];
-  if (!sel || n < 2 || !metrics || !metrics.length) return '';
+  if (!sel || n < 2 || !cols || !cols.length) return '';
+  const groups = opts.groups;
 
   const seen = new Set();
   const rows = [];
@@ -212,14 +215,18 @@ export function comparisonTableHtml(series, i, metrics) {
     return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toString().replace('.', ',')}%</span>`;
   };
   const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
-  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;color:var(--muted);';
-  const head = `<tr><th style="${thBase}text-align:left;">wanneer</th>${metrics.map(m => `<th style="${thBase}text-align:center;">${m.label}</th>`).join('')}</tr>`;
+  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;';
+  const thC = (t, color, span) => `<th${span ? ` colspan="${span}"` : ''} style="${thBase}text-align:center;color:${color || 'var(--muted)'};">${t}</th>`;
+  const head = (groups && groups.length)
+    ? `<tr><th rowspan="2" style="${thBase}text-align:left;vertical-align:bottom;color:var(--muted);">wanneer</th>${groups.map(g => thC(g.label, g.color, g.span)).join('')}</tr>`
+      + `<tr>${cols.map(c => thC(c.label, c.color)).join('')}</tr>`
+    : `<tr><th style="${thBase}text-align:left;color:var(--muted);">wanneer</th>${cols.map(c => thC(c.label, c.color)).join('')}</tr>`;
   const body = rows.map(({ idx, label }) => {
     const r = series[idx];
     const isSel = idx === i;
-    const cells = metrics.map(m => isSel
+    const cells = cols.map(c => isSel
       ? `<td style="padding:0.12rem 0.4rem;text-align:center;color:var(--muted);">—</td>`
-      : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(m.value(r), m.value(sel)))}</td>`).join('');
+      : `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(c.value(r), c.value(sel)))}</td>`).join('');
     const rowStyle = isSel ? 'background:var(--s2);box-shadow:inset 3px 0 0 var(--text);' : '';
     const lblStyle = isSel ? 'font-weight:800;color:var(--text);' : 'color:var(--muted);';
     return `<tr style="${rowStyle}"><td style="padding:0.12rem 0.4rem;text-align:left;font-size:0.72rem;${lblStyle}white-space:nowrap;">${label} <span style="opacity:0.6;">${dLab(r.date)}</span></td>${cells}</tr>`;
@@ -227,4 +234,38 @@ export function comparisonTableHtml(series, i, metrics) {
   return `<div style="margin-top:0.5rem;border-top:1px solid var(--border);padding-top:0.35rem;">`
     + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking <span style="font-weight:400;color:var(--muted);">(t.o.v. dit punt)</span></div>`
     + `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;font-family:var(--mono);"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}
+
+// Column spec for the comparison table, matching the set table's shape for this
+// exercise. Returns { cols, groups? } to pass to comparisonTableHtml.
+// opts: { colLeft, colRight, metric, cardioMode }.
+export function comparisonColumns(ex, opts = {}) {
+  const { colLeft = '#3b82f6', colRight = '#f59e0b', metric = 'weight', cardioMode = 'avg' } = opts;
+  if (metric === 'speed') {
+    return { cols: [{ label: 'snelheid', value: pt => (cardioMode === 'max' ? pt.speedMax : pt.avgAll) }] };
+  }
+  if (ex.perSide && ex.weighted && metric !== 'duration') {
+    return {
+      cols: [
+        { label: 'kg', color: colLeft, value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
+        { label: 'reps', color: colLeft, value: pt => pt.repsAvgLeft || 0 },
+        { label: 'kg', color: colRight, value: pt => pt.statRight ? pt.statRight.avg : 0 },
+        { label: 'reps', color: colRight, value: pt => pt.repsAvgRight || 0 },
+      ],
+      groups: [{ label: 'Links', color: colLeft, span: 2 }, { label: 'Rechts', color: colRight, span: 2 }],
+    };
+  }
+  if (ex.perSide) {
+    return { cols: [
+      { label: 'Links', color: colLeft, value: pt => pt.statLeft ? pt.statLeft.avg : 0 },
+      { label: 'Rechts', color: colRight, value: pt => pt.statRight ? pt.statRight.avg : 0 },
+    ] };
+  }
+  if (ex.weighted) {
+    return { cols: [
+      { label: 'gewicht', value: pt => pt.statAll ? pt.statAll.avg : 0 },
+      { label: 'reps', value: pt => pt.repsAvg || 0 },
+    ] };
+  }
+  return { cols: [{ label: metric === 'duration' ? 'duur' : 'reps', value: pt => pt.statAll ? pt.statAll.avg : 0 }] };
 }

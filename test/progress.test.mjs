@@ -107,6 +107,8 @@ test('seriesForExercise: exposes statLeft/statRight/statAll with per-side stats'
   assert.equal(s[0].statRight.min, 12);
   assert.equal(s[0].statRight.max, 12);
   assert.equal(s[0].statAll.max, 20);
+  assert.equal(s[0].repsAvgLeft, 8);   // (10 + 6) / 2
+  assert.equal(s[0].repsAvgRight, 8);  // single set, 8 reps
 });
 
 test('seriesForExercise: per-side weight splits different L/R loads into separate series', () => {

@@ -1147,16 +1147,11 @@ function showChartPoint(i) {
               <div style="color:var(--muted);">${Math.round(durSec / 60)} min &nbsp;·&nbsp; ${distKm.toFixed(2).replace('.', ',')} km</div>`;
     }
   }
-  // Comparison vs other sessions, as a table.
-  let metrics;
-  if (chartMeta.metric === 'speed') {
-    metrics = [{ label: 'snelheid', value: pt => (chartMeta.cardioMode === 'max') ? pt.speedMax : pt.avgAll }];
-  } else if (chartMeta.weighted) {
-    metrics = [{ label: 'gewicht', value: pt => pt.statAll ? pt.statAll.avg : 0 }, { label: 'reps', value: pt => pt.repsAvg }];
-  } else {
-    metrics = [{ label: chartMeta.metric === 'duration' ? 'duur' : 'reps', value: pt => pt.statAll ? pt.statAll.avg : 0 }];
-  }
-  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, metrics);
+  // Comparison vs other sessions, as a table that mirrors the set table's columns.
+  const { cols, groups } = window.Chart.comparisonColumns(
+    { perSide: chartMeta.perSide, weighted: chartMeta.weighted },
+    { colLeft: chartMeta.colLeft, colRight: chartMeta.colRight, metric: chartMeta.metric, cardioMode: chartMeta.cardioMode });
+  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, cols, { groups });
 
   // Set breakdown of this session for the current exercise (replaces the old list).
   const sessObj = loadHistory().find(s => s.id === p.id);

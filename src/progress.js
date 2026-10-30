@@ -100,6 +100,8 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
       statAll: statFor(sets, metricKey),
       statLeft: statFor(leftSets, metricKey),
       statRight: statFor(rightSets, metricKey),
+      repsAvgLeft: avg(leftSets.map(s => s.reps || 0)),
+      repsAvgRight: avg(rightSets.map(s => s.reps || 0)),
     });
   }
   return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));

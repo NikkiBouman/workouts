@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStatChart, sessionSetTableHtml, comparisonTableHtml } from '../src/chart.js';
+import { buildStatChart, sessionSetTableHtml, comparisonTableHtml, comparisonColumns } from '../src/chart.js';
 import { seriesForExercise } from '../src/progress.js';
 
 const COLORS = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6', grid: '#eee', label: '#999', bg: '#fff' };
@@ -116,6 +116,21 @@ test('comparisonTableHtml: all five labels appear when tapping a middle session'
   const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }];
   const html = comparisonTableHtml(series, 2, metrics); // tap the 3rd of 5
   ['Eerste keer', 'Vorige keer', 'Dit punt', 'Volgende keer', 'Recentste keer'].forEach(l => assert.ok(html.includes(l), l));
+});
+
+test('comparisonColumns: per-side weighted yields 4 columns grouped Links/Rechts', () => {
+  const { cols, groups } = comparisonColumns({ perSide: true, weighted: true }, { colLeft: '#00f', colRight: '#f80', metric: 'weight' });
+  assert.equal(cols.length, 4);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map(g => g.label), ['Links', 'Rechts']);
+  const series = [
+    { date: '2026-09-01T08:00:00.000Z', statLeft: { avg: 15 }, statRight: { avg: 12 }, repsAvgLeft: 10, repsAvgRight: 10 },
+    { date: '2026-09-08T08:00:00.000Z', statLeft: { avg: 17 }, statRight: { avg: 13 }, repsAvgLeft: 10, repsAvgRight: 8 },
+  ];
+  const html = comparisonTableHtml(series, 1, cols, { groups });
+  assert.ok(html.includes('Links') && html.includes('Rechts'));
+  assert.ok(html.includes('>kg</th>') && html.includes('>reps</th>'));
+  assert.ok(html.includes('var(--red)')); // Eerste keer L kg (15 vs 17) is lower
 });
 
 test('comparisonTableHtml: empty when fewer than two sessions', () => {
