@@ -1147,29 +1147,16 @@ function showChartPoint(i) {
               <div style="color:var(--muted);">${Math.round(durSec / 60)} min &nbsp;·&nbsp; ${distKm.toFixed(2).replace('.', ',')} km</div>`;
     }
   }
-  // Comparisons vs other sessions (first / previous / next / most recent, deduped).
-  const n = chartSeries.length;
-  const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
-  const badge = v => {
-    if (v === null || !isFinite(v)) return '<span style="color:var(--muted);">–</span>';
-    const col = v > 0.05 ? 'var(--green)' : v < -0.05 ? 'var(--red)' : 'var(--muted)';
-    return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${v.toFixed(1).replace('.', ',')}%</span>`;
-  };
-  const seen = new Set([i]);
-  const targets = [];
-  const addT = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); targets.push({ idx, label }); } };
-  addT(0, 'Eerste'); addT(i - 1, 'Vorige'); addT(i + 1, 'Volgende'); addT(n - 1, 'Recent');
-  let cmp = '';
-  if (targets.length) {
-    const cv = pt => (chartMeta.metric === 'speed' && chartMeta.cardioMode === 'max') ? pt.speedMax : pt.avgAll;
-    const rowMain = r => chartMeta.weighted
-      ? `gewicht ${badge(pct(p.weightAvg, r.weightAvg))} &nbsp; reps ${badge(pct(p.repsAvg, r.repsAvg))}`
-      : badge(pct(cv(p), cv(r)));
-    cmp = `<div style="margin-top:0.45rem;border-top:1px solid var(--border);padding-top:0.35rem;">
-      <div style="font-weight:700;color:var(--text);margin-bottom:0.2rem;">Vergelijking</div>` +
-      targets.map(t => `<div style="display:flex;justify-content:space-between;gap:0.75rem;margin-top:0.1rem;"><span style="color:var(--muted);">${t.label}</span><span style="text-align:right;">${rowMain(chartSeries[t.idx])}</span></div>`).join('') +
-      `</div>`;
+  // Comparison vs other sessions, as a table.
+  let metrics;
+  if (chartMeta.metric === 'speed') {
+    metrics = [{ label: 'snelheid', value: pt => (chartMeta.cardioMode === 'max') ? pt.speedMax : pt.avgAll }];
+  } else if (chartMeta.weighted) {
+    metrics = [{ label: 'gewicht', value: pt => pt.statAll ? pt.statAll.avg : 0 }, { label: 'reps', value: pt => pt.repsAvg }];
+  } else {
+    metrics = [{ label: chartMeta.metric === 'duration' ? 'duur' : 'reps', value: pt => pt.statAll ? pt.statAll.avg : 0 }];
   }
+  const cmp = window.Chart.comparisonTableHtml(chartSeries, i, metrics);
 
   // Set breakdown of this session for the current exercise (replaces the old list).
   const sessObj = loadHistory().find(s => s.id === p.id);

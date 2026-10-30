@@ -182,3 +182,37 @@ export function sessionSetTableHtml(ex, sets, opts = {}) {
   if (ex.weighted) return table(`<tr>${th('#')}${th('kg')}${th('reps')}</tr>`, rows1(x => td(num(x.weight)) + td(num(x.reps))) + summary([statFor(sets, 'weight'), statFor(sets, 'reps')]));
   return table(`<tr>${th('#')}${th('reps')}</tr>`, rows1(x => td(num(x.reps))) + summary([statFor(sets, 'reps')]));
 }
+
+// Comparison table of the tapped session (index i) against reference sessions —
+// first / previous / next / most recent (deduped). Each metric is a column showing
+// the % change of this session relative to that reference (green up, red down).
+// metrics: [{ label, value: pt => number }].
+export function comparisonTableHtml(series, i, metrics) {
+  const n = (series || []).length;
+  const p = series && series[i];
+  if (!p || n < 2 || !metrics || !metrics.length) return '';
+
+  const seen = new Set([i]);
+  const targets = [];
+  const add = (idx, label) => { if (idx >= 0 && idx < n && !seen.has(idx)) { seen.add(idx); targets.push({ idx, label }); } };
+  add(0, 'Eerste'); add(i - 1, 'Vorige'); add(i + 1, 'Volgende'); add(n - 1, 'Recent');
+  if (!targets.length) return '';
+
+  const pct = (c, r) => (r > 0) ? ((c - r) / r * 100) : null;
+  const badge = v => {
+    if (v == null || !isFinite(v)) return '<span style="color:var(--muted);">–</span>';
+    const col = v > 0.5 ? 'var(--green)' : v < -0.5 ? 'var(--red)' : 'var(--muted)';
+    return `<span style="color:${col};font-weight:700;">${v > 0 ? '+' : ''}${(Math.round(v * 10) / 10).toString().replace('.', ',')}%</span>`;
+  };
+  const dLab = d => new Date(d).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short' });
+  const thBase = 'font-weight:700;font-size:0.6rem;text-transform:uppercase;letter-spacing:0.03em;padding:0.1rem 0.4rem;color:var(--muted);';
+  const head = `<tr><th style="${thBase}text-align:left;">vs</th>${metrics.map(m => `<th style="${thBase}text-align:center;">${m.label}</th>`).join('')}</tr>`;
+  const body = targets.map(t => {
+    const r = series[t.idx];
+    const cells = metrics.map(m => `<td style="padding:0.12rem 0.4rem;text-align:center;">${badge(pct(m.value(p), m.value(r)))}</td>`).join('');
+    return `<tr><td style="padding:0.12rem 0.4rem;text-align:left;color:var(--muted);font-size:0.72rem;white-space:nowrap;">${t.label} <span style="opacity:0.6;">${dLab(r.date)}</span></td>${cells}</tr>`;
+  }).join('');
+  return `<div style="margin-top:0.5rem;border-top:1px solid var(--border);padding-top:0.35rem;">`
+    + `<div style="font-weight:700;font-size:0.72rem;color:var(--text);margin-bottom:0.15rem;">Vergelijking</div>`
+    + `<table style="width:100%;border-collapse:collapse;font-size:0.76rem;font-family:var(--mono);"><thead>${head}</thead><tbody>${body}</tbody></table></div>`;
+}

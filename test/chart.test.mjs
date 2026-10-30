@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildStatChart, sessionSetTableHtml } from '../src/chart.js';
+import { buildStatChart, sessionSetTableHtml, comparisonTableHtml } from '../src/chart.js';
 import { seriesForExercise } from '../src/progress.js';
 
 const COLORS = { left: '#3b82f6', right: '#f59e0b', single: '#8b5cf6', grid: '#eee', label: '#999', bg: '#fff' };
@@ -93,6 +93,23 @@ test('sessionSetTableHtml: single weighted has kg + reps columns and a summary',
   assert.ok(html.includes('>kg</th>') && html.includes('>reps</th>'));
   assert.ok(html.includes('>min<') && html.includes('>max<'));
   assert.equal((html.match(/<tr>/g) || []).length, 6); // 1 header + 2 set + 3 summary
+});
+
+test('comparisonTableHtml: a row per reference session with signed % change', () => {
+  const series = [
+    { date: '2026-09-01T08:00:00.000Z', statAll: { avg: 10 }, repsAvg: 8 },
+    { date: '2026-09-08T08:00:00.000Z', statAll: { avg: 12 }, repsAvg: 10 },
+    { date: '2026-09-15T08:00:00.000Z', statAll: { avg: 15 }, repsAvg: 9 },
+  ];
+  const metrics = [{ label: 'gewicht', value: p => p.statAll.avg }, { label: 'reps', value: p => p.repsAvg }];
+  const html = comparisonTableHtml(series, 2, metrics); // tapped the last: 15 kg, 9 reps
+  assert.ok(html.includes('Vergelijking') && html.includes('gewicht') && html.includes('reps'));
+  assert.ok(html.includes('+50%'));  // weight vs Eerste: (15-10)/10
+  assert.ok(html.includes('Eerste') && html.includes('Vorige'));
+});
+
+test('comparisonTableHtml: empty when fewer than two sessions', () => {
+  assert.equal(comparisonTableHtml([{ date: 'x', statAll: { avg: 1 } }], 0, [{ label: 'g', value: p => p.statAll.avg }]), '');
 });
 
 test('empty series yields empty svg', () => {
