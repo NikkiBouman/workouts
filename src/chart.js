@@ -43,7 +43,16 @@ export function buildStatChart(series, opts) {
   const yStep = Math.max(1, Math.ceil((hi - lo) / 4));
   hi = lo + yStep * Math.ceil((hi - lo) / yStep);
 
-  const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+  // X position is proportional to the actual date, so the gap between sessions
+  // reflects elapsed time (not just their order). Single session -> centred;
+  // all on the same instant -> even index spacing so they don't stack.
+  const times = series.map(p => +new Date(p.date));
+  const tMin = Math.min(...times), tMax = Math.max(...times);
+  const x = i => {
+    if (series.length === 1) return padL + plotW / 2;
+    if (tMax === tMin) return padL + (i / (series.length - 1)) * plotW;
+    return padL + ((times[i] - tMin) / (tMax - tMin)) * plotW;
+  };
   const y = v => padT + plotH - ((v - lo) / (hi - lo)) * plotH;
   const xs = series.map((_, i) => x(i));
 

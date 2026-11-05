@@ -1082,7 +1082,15 @@ function renderProgressChart(id) {
   const valSource = visible.length ? visible : lines;
   const allVals = valSource.flatMap(L => series.map(p => p[L.key]));
   const yMax = Math.max(1, Math.ceil(Math.max(...allVals) * 1.15));
-  const x = i => padL + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+  // X proportional to the actual date, so time gaps between sessions show up
+  // (mirrors the stat chart in src/chart.js). Same-instant -> even spacing.
+  const times = series.map(p => +new Date(p.date));
+  const tMin = Math.min(...times), tMax = Math.max(...times);
+  const x = i => {
+    if (series.length === 1) return padL + plotW / 2;
+    if (tMax === tMin) return padL + (i / (series.length - 1)) * plotW;
+    return padL + ((times[i] - tMin) / (tMax - tMin)) * plotW;
+  };
   const y = v => padT + plotH - (v / yMax) * plotH;
 
   chartMeta = { perSide: !!ex.perSide, unit, metric, weighted: !!ex.weighted, cardioMode, colLeft: CHART_COL.left, colRight: CHART_COL.right,

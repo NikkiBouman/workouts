@@ -67,6 +67,21 @@ test('left and right coinciding -> one purple filled dot at the shared avg', () 
   assert.equal(count(svg, `fill="${COLORS.single}"`), 1);    // the shared avg is purple + filled
 });
 
+test('x positions are proportional to dates, not evenly spaced by index', () => {
+  // Oct 5, Nov 5, Nov 6: the Oct→Nov gap (31d) dwarfs the Nov 5→6 gap (1d),
+  // so the first segment must be far wider than the second.
+  const sessions = ['2026-10-05', '2026-11-05', '2026-11-06'].map(d => ({
+    date: `${d}T08:00:00.000Z`,
+    exercises: [{ exerciseId: 'sq', weighted: true, measureBy: 'reps', perSide: false, sets: [{ weight: 20, reps: 10 }] }],
+  }));
+  const series = seriesForExercise(sessions, 'sq', false, 'weight');
+  const { xs } = buildStatChart(series, { perSide: false, colors: COLORS, unit: ' kg' });
+  assert.equal(xs.length, 3);
+  const gap01 = xs[1] - xs[0], gap12 = xs[2] - xs[1];
+  // 31 days vs 1 day -> first gap ~31x the second (would be equal if index-based).
+  assert.ok(gap01 > gap12 * 20, `expected a far wider Oct→Nov gap, got ${gap01} vs ${gap12}`);
+});
+
 test('y-axis labels are whole numbers', () => {
   const series = seriesForExercise(perSideSessions, 'sle', true, 'weight'); // rep-weighted avgs are fractional
   const { svg } = buildStatChart(series, { perSide: true, colors: COLORS, unit: ' kg' });
