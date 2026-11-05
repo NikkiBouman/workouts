@@ -74,6 +74,16 @@ function demoWorkouts() {
         { type: 'segment', mode: 'time', duration: 60,  distance: 0, speed: 5,  incline: 0 },
       ] },
     ],
+  }, {
+    // Strength demo: all three exercises in "beter dan vorige keer" mode so the runner
+    // shows the previous-session panel, the coloured leg badge and the 2.5 kg stepper.
+    id: 'demo_strength_progressive',
+    name: 'Krachttraining (demo · beter dan vorige keer)',
+    entries: [
+      { id: 'demo_e_slp', exerciseId: 'ex_single_leg_press', sets: 3, reps: 10, duration: null, weight: 0, progressive: true },
+      { id: 'demo_e_nordic', exerciseId: 'ex_nordic_hamstring_curl', sets: 3, reps: 6, duration: null, weight: null, progressive: true },
+      { id: 'demo_e_squat', exerciseId: 'ex_squat', sets: 3, reps: 8, duration: null, weight: 0, progressive: true },
+    ],
   }];
 }
 
@@ -101,5 +111,42 @@ function demoSessions() {
         { weight: null, reps: null, duration: 180, speed: 6,  side: null, hr: seg(180, 110, 480) },
       ],
     }],
-  }];
+  },
+  // --- Strength history for the progressive demo workout -----------------
+  // Two weeks back: lighter / fewer reps. These must be ignored in favour of the
+  // most recent session when seeding "beter dan vorige keer".
+  strengthSession('demo_str_old', '2026-10-27T18:00:00.000Z', [
+    exLog('ex_single_leg_press', 'Single Leg Press', true, true, [
+      s(22.5, 6, 0), s(22.5, 6, 0), s(25, 5, 0),  s(20, 6, 1), s(22.5, 6, 1), s(22.5, 5, 1),
+    ]),
+    exLog('ex_nordic_hamstring_curl', 'Nordic Hamstring Curl', false, false, [
+      r(4), r(4), r(4),
+    ]),
+    exLog('ex_squat', 'Squat', true, false, [
+      s(40, 10), s(42.5, 8), s(45, 6),
+    ]),
+  ]),
+  // Most recent session → this is what the runner shows as "vorige keer" and seeds
+  // the prefill from. Left leg a touch stronger than right (25→27.5 vs 24→25).
+  strengthSession('demo_str_last', '2026-11-03T18:00:00.000Z', [
+    exLog('ex_single_leg_press', 'Single Leg Press', true, true, [
+      s(25, 6, 0), s(27.5, 5, 0), s(27.5, 4, 0),  s(24, 6, 1), s(25, 5, 1), s(25, 4, 1),
+    ]),
+    exLog('ex_nordic_hamstring_curl', 'Nordic Hamstring Curl', false, false, [
+      r(6), r(6), r(6),
+    ]),
+    exLog('ex_squat', 'Squat', true, false, [
+      s(45, 10), s(50, 8), s(52.5, 5),
+    ]),
+  ])];
+}
+
+// --- helpers for the strength demo sessions ---
+function s(weight, reps, side = null) { return { weight, reps, duration: null, side }; }
+function r(reps, side = null) { return { weight: null, reps, duration: null, side }; }
+function exLog(exerciseId, name, weighted, perSide, sets) {
+  return { exerciseId, name, type: 'strength', measureBy: 'reps', weighted, perSide, sets };
+}
+function strengthSession(id, date, exercises) {
+  return { id, date, workoutId: 'demo_strength_progressive', workoutName: 'Krachttraining (demo)', totalSeconds: 1800, exercises };
 }

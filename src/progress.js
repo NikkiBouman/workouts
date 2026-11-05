@@ -110,6 +110,43 @@ export function seriesForExercise(sessions, exerciseId, perSide = false, metricK
   return out.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 }
 
+// The most recent session that includes this exercise, plus per-side maxima for
+// weight / reps / duration — the prefill targets for "beter dan vorige keer" mode.
+// Side falls back to capture order (L,R,L,R…) when a set has no explicit `side`.
+// For a non-perSide exercise the *L/*R values equal the overall max. Returns null
+// when the exercise was never logged.
+export function lastSessionTargets(sessions, exerciseId) {
+  const found = [];
+  for (const s of sessions) {
+    const e = (s.exercises || []).find(x => x.exerciseId === exerciseId);
+    if (e) found.push({ date: s.date, perSide: !!e.perSide, sets: e.sets || [] });
+  }
+  if (!found.length) return null;
+  found.sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const last = found[found.length - 1];
+  const sets = last.sets;
+  const perSide = last.perSide || sets.some(s => s.side === 0 || s.side === 1);
+  const sideOfSet = (s, i) => (s.side === 0 || s.side === 1) ? s.side : i % 2;
+  const maxBy = (key, pick) => sets.reduce((m, s, i) => {
+    if (pick != null && sideOfSet(s, i) !== pick) return m;
+    return Math.max(m, s[key] || 0);
+  }, 0);
+  const sideMax = (key, pick) => perSide ? maxBy(key, pick) : maxBy(key, null);
+  return {
+    date: last.date,
+    perSide,
+    sets: sets.map((s, i) => ({
+      side: perSide ? sideOfSet(s, i) : null,
+      weight: s.weight || 0,
+      reps: s.reps || 0,
+      duration: s.duration || 0,
+    })),
+    maxWeight: maxBy('weight'), maxWeightL: sideMax('weight', 0), maxWeightR: sideMax('weight', 1),
+    maxReps: maxBy('reps'), maxRepsL: sideMax('reps', 0), maxRepsR: sideMax('reps', 1),
+    maxDur: maxBy('duration'), maxDurL: sideMax('duration', 0), maxDurR: sideMax('duration', 1),
+  };
+}
+
 export function statsForExercise(sessions, exerciseId) {
   const entries = entriesFor(sessions, exerciseId);
   const empty = { count: 0, lastDate: null, prWeight: 0, currentWeight: 0, prWeightLeft: 0, prWeightRight: 0, currentWeightLeft: 0, currentWeightRight: 0 };

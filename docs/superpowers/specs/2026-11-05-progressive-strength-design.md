@@ -73,6 +73,10 @@ waarheid is en `index.html` niet verder groeit.
 ```js
 export const WEIGHT_STEP = 2.5;
 
+// De één metric waarop een oefening progresseert ("MAX"): gewicht bij gewogen, anders
+// de gemeten metric (reps of duur). Secundaire metrics blijven het geplande doel.
+export function primaryMetric(ex)             // -> 'weight' | 'reps' | 'duration'
+
 // Doel-waarden voor één zijde (0=links,1=rechts) uit targets, gegeven ex-meta.
 export function targetFor(targets, sideIndex, ex)
   // -> { weight, reps, duration }  (0 als er geen historie/metric is)
@@ -80,57 +84,71 @@ export function targetFor(targets, sideIndex, ex)
 // Gekleurde zijde-badge, of '' als niet-perSide.
 export function sideBadgeHtml(sideIndex, perSide, { colLeft, colRight })
 
-// Volledige "vorige sessie"-paneel, of een "geen vorige sessie"-notitie.
+// "Vorige keer"-paneel: datum-kopje + exact dezelfde set-tabel als de oefening-detail
+// (hergebruikt `sessionSetTableHtml` uit chart.js), of een "geen vorige sessie"-notitie.
 export function prevSessionPanelHtml(targets, ex, { colLeft, colRight })
 ```
 
-Unit tests in `test/strength-ui.test.mjs` (badge-kleur per zijde, paneel-inhoud,
-`targetFor` per zijde, lege-historie-pad).
+Unit tests in `test/strength-ui.test.mjs` (badge-kleur per zijde, hergebruikte tabel,
+`primaryMetric`, `targetFor` per zijde, lege-historie-pad).
 
 ## UI-wijzigingen in `index.html`
 
-### Editor (`renderStrengthEditor`, ~1686)
+### Editor (`renderStrengthEditor`) — hele-rij MAX-toggle
 
-Boven de velden een twee-staps toggle (bestaande `.toggle-group`/`.toggle-opt` stijl):
+Eén toggle voor de hele rij in plaats van een aparte toggle bovenaan:
 
 ```
-Doel:  [ Vast gewicht ]  [ Beter dan vorige keer ]
+┌─────────────────────────────────┐      ┌─────┐
+│ SETS   HERHALINGEN   GEWICHT(KG) │  of  │ MAX │
+└─────────────────────────────────┘      └─────┘
+     manueel (blauw gevuld = actief)       MAX (blauw gevuld = actief)
 ```
 
-- **Vast gewicht**: huidige Sets/Reps/Gewicht-velden.
-- **Beter dan vorige keer**: alleen **Sets** blijft (aantal kies je zelf); Reps en
-  Gewicht verborgen; notitie "🎯 Gewicht & reps komen van je vorige sessie". De
-  `↔ Per zijde`-notitie blijft. Schrijft `editorEntries[ei].progressive`.
+- De **MAX**-metric is de `primaryMetric(ex)`: gewicht bij gewogen, anders reps/duur.
+  MAX = "beter dan vorige keer" → die metric komt uit de historie-max. Secundaire velden
+  (bv. reps bij een gewogen lift) blijven het geplande doel.
+- **MAX aangetikt** → `entry.progressive = true`; nog eens tikken togglet terug.
+- **Focus/tik in het manuele vak** (ergens — label, rand of input) → terug naar manueel
+  (`setEntryFixed`). De actieve kant is een blauw vlak met witte labels (inputs houden
+  hun eigen uiterlijk); updates gebeuren in-place zodat focus behouden blijft.
+- Grijze **"of"** tussen de twee kanten; "of" + MAX rechts uitgelijnd (`margin-left:auto`)
+  zodat MAX bij elke oefening op dezelfde plek staat.
+- `↔ Per zijde` staat onder de oefening-titel in de blok-kop (niet in de velden-rij).
+- Alleen strength-oefeningen krijgen MAX; stretches houden gewone velden.
 
-### Runner (`runnerStrengthMode` HTML + `updateStrengthUI`, ~2350)
+### Runner (`runnerStrengthMode` HTML + `updateStrengthUI`)
 
-- Nieuw `<div id="strPrevSession">` boven `#strCapture`. In progressieve modus toont
-  het `prevSessionPanelHtml(...)`; anders leeg/verborgen.
-- Zijde-indicator wordt `sideBadgeHtml(...)` — blauw "Links" / oranje "Rechts" — voor
-  **alle** per-zijde krachtoefeningen.
-- Prefill in progressieve modus: capture-velden starten op `targetFor(targets, side, ex)`
-  (gewicht, reps) resp. de timer op de doel-duur. `strDetail` ("Doel: X reps") toont de
-  historie-max.
+- Nieuw `<div id="strPrevSession">`: in progressieve modus toont het
+  `prevSessionPanelHtml(...)` — de **exact dezelfde tabel** als de oefening-detail —
+  anders leeg/verborgen.
+- Zijde-indicator wordt een gekleurde badge `sideBadgeHtml(...)` — blauw "Links" /
+  oranje "Rechts" — voor **alle** per-zijde krachtoefeningen.
+- Doel/prefill (`strGoalFor`): geplande waarden, met alleen de `primaryMetric` vervangen
+  door de historie-max per zijde. `strDetail`/`strWeight` tonen dat doel.
 - **Carry-forward per zijde**: een kleine runtime-map onthoudt je werkelijk ingevoerde
-  waarde per zijde, zodat set 2 Links start waar je set 1 Links eindigde (niet terug naar
-  de historie-max). Startwaarde van de map = de historie-doelen.
+  waarde per zijde, zodat set 2 Links start waar je set 1 Links eindigde.
 - `bumpCap`: gewichtsstap wordt **2.5** (was 0.5); reps blijft 1.
+- De ✓-knop verhuist naar de onderste knoppenrij als groene **"✓ Voltooid"** (naast Skip
+  en Stop); **▶ Start** staat daar ook en verschijnt alleen voor duur/hartslag-sets. De
+  oefening-gif is kleiner zodat alles past.
 
 ### Geen historie
 
 Eerste keer (geen vorige sessie): paneel toont "Geen vorige sessie — zet je eigen
 gewicht"; prefill valt terug op geplande/0-waarden.
 
-## Demo-pagina
+## Demo
 
-`demo-progressive.html` (zelfstandig, naar model van `demo.html`): importeert
-`lastSessionTargets` uit `progress.js` en de renderers uit `strength-ui.js`, met
-dummy-sessies voor o.a. een per-zijde gewogen oefening en een bodyweight reps-oefening
-(Nordic 3×4 → 3×6). Je kunt met ▶/✓ door de sets klikken en zo het paneel, de gekleurde
-badge, de 2.5-stepper, de prefill en de carry-forward controleren — zonder Firebase.
+In plaats van een losse demo-pagina breiden we de bestaande demo-modus
+(`index.html?demo`, gevoed door `src/demo-db.js`) uit — dat draait de **echte runner**
+en is dus de meest getrouwe check. Toegevoegd: een krachtworkout "Krachttraining
+(demo · beter dan vorige keer)" met drie progressieve oefeningen (per-zijde gewogen
+Single Leg Press, bodyweight Nordic 3×4 → 3×6, en gewogen Squat) plus twee eerdere
+sessies als historie. Zo zie je in de runner het "vorige keer"-paneel, de gekleurde
+been-badge, de 2.5 kg-stepper, de prefill en de carry-forward — zonder Firebase.
 
 ## Testen
 
 - `npm test` (node:test) voor `progress.js` en `strength-ui.js`.
-- Handmatige check in `demo-progressive.html`.
-```
+- Handmatige check in `index.html?demo`.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { metricForExercise, seriesForExercise, statsForExercise, statFor } from '../src/progress.js';
+import { metricForExercise, seriesForExercise, statsForExercise, statFor, lastSessionTargets } from '../src/progress.js';
 
 const sessions = [
   { date: '2026-01-02T10:00:00.000Z', exercises: [
@@ -143,6 +143,54 @@ test('statsForExercise: per-leg PR and current for a per-side exercise', () => {
   assert.equal(st.prWeightRight, 14);
   assert.equal(st.currentWeightLeft, 17);
   assert.equal(st.currentWeightRight, 13);
+});
+
+test('lastSessionTargets: picks the most recent session and its overall maxima', () => {
+  const t = lastSessionTargets(sessions, 'a'); // last = 2026-01-05, single set 14x8
+  assert.equal(t.date, '2026-01-05T10:00:00.000Z');
+  assert.equal(t.perSide, false);
+  assert.equal(t.maxWeight, 14);
+  assert.equal(t.maxReps, 8);
+  // non-perSide: *L and *R equal the overall max (not split by capture order)
+  assert.equal(t.maxWeightL, 14);
+  assert.equal(t.maxWeightR, 14);
+  assert.equal(t.maxRepsL, 8);
+  assert.equal(t.maxRepsR, 8);
+});
+
+test('lastSessionTargets: per-leg maxima from the latest session only', () => {
+  const ps = [
+    { date: '2026-08-01T08:00:00.000Z', exercises: [ { exerciseId: 'sle', perSide: true, weighted: true, measureBy: 'reps',
+      sets: [ { weight: 25, reps: 4, side: 0 }, { weight: 99, reps: 9, side: 0 } ] } ] }, // older — must be ignored
+    { date: '2026-08-08T08:00:00.000Z', exercises: [ { exerciseId: 'sle', perSide: true, weighted: true, measureBy: 'reps',
+      sets: [ { weight: 25, reps: 6, side: 0 }, { weight: 26, reps: 5, side: 0 },
+              { weight: 24, reps: 6, side: 1 }, { weight: 25, reps: 5, side: 1 } ] } ] },
+  ];
+  const t = lastSessionTargets(ps, 'sle');
+  assert.equal(t.date, '2026-08-08T08:00:00.000Z');
+  assert.equal(t.perSide, true);
+  assert.equal(t.maxWeightL, 26);
+  assert.equal(t.maxWeightR, 25);
+  assert.equal(t.maxRepsL, 6);
+  assert.equal(t.maxRepsR, 6);
+  assert.equal(t.sets.length, 4);
+  assert.deepEqual(t.sets[0], { side: 0, weight: 25, reps: 6, duration: 0 });
+});
+
+test('lastSessionTargets: Nordic 3x4 -> 3x6 reps progression (bodyweight)', () => {
+  const ps = [
+    { date: '2026-09-01T08:00:00.000Z', exercises: [ { exerciseId: 'nordic', weighted: false, measureBy: 'reps',
+      sets: [ { reps: 4 }, { reps: 4 }, { reps: 4 } ] } ] },
+    { date: '2026-09-08T08:00:00.000Z', exercises: [ { exerciseId: 'nordic', weighted: false, measureBy: 'reps',
+      sets: [ { reps: 6 }, { reps: 6 }, { reps: 6 } ] } ] },
+  ];
+  const t = lastSessionTargets(ps, 'nordic');
+  assert.equal(t.maxReps, 6);
+  assert.equal(t.maxWeight, 0);
+});
+
+test('lastSessionTargets: unknown exercise yields null', () => {
+  assert.equal(lastSessionTargets(sessions, 'zzz'), null);
 });
 
 test('exercise with no sessions yields empty/zero', () => {

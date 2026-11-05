@@ -363,14 +363,34 @@ input:focus { border-color:var(--cyan); }
 }
 .toggle-opt.active { background:var(--cyan); color:var(--bg); }
 
+/* Doel-toggle for a strength entry: one whole-row toggle between the manual fields
+   (sets/reps/kg, outlined blue when active) and MAX = beat last time (filled blue when
+   active). Exactly one side is active. */
+.doel-manual {
+  display:flex; align-items:end; gap:0.75rem;
+  padding:0.4rem 0.6rem; border:2px solid var(--border); border-radius:10px;
+}
+/* Active side fills blue with white text (labels only — the inputs keep their own look). */
+.doel-manual.active { border-color:var(--cyan); background:var(--cyan); }
+.doel-manual.active .field-label { color:#fff; }
+/* Push "of" + MAX to the right edge so MAX lines up across all exercises. */
+.doel-of { align-self:center; margin-left:auto; color:var(--muted); font-size:0.8rem; }
+.doel-max {
+  align-self:stretch; min-width:62px; padding:0 1rem;
+  border:2px solid var(--border); border-radius:10px; background:var(--s1);
+  color:var(--muted); font-family:var(--ui); font-weight:800; font-size:0.85rem;
+  letter-spacing:0.08em; cursor:pointer;
+}
+.doel-max.active { background:var(--cyan); border-color:var(--cyan); color:#fff; }
+
 h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.06em; margin-bottom:0.4rem; }
 
 .str-img {
-  width:min(70vw, 300px); height:min(70vw, 300px); object-fit:cover;
-  background:var(--s2); border-radius:var(--r); margin:1.5rem auto 0; display:block;
+  width:min(45vw, 200px); height:min(45vw, 200px); max-height:26vh; object-fit:cover;
+  background:var(--s2); border-radius:var(--r); margin:0.5rem auto 0; display:block;
 }
 @media (min-width:600px) {
-  .str-img { width:300px; height:300px; }
+  .str-img { width:200px; height:200px; }
 }
 </style>
 </head>
@@ -645,8 +665,10 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
         <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:1rem;gap:0.35rem;">
           <div id="strExName" style="font-size:1rem;font-weight:600;color:var(--muted);"></div>
           <div id="strSetLabel" style="font-family:var(--mono);font-size:2rem;font-weight:800;line-height:1.2;"></div>
+          <div id="strSideBadge" style="margin:0.1rem 0;"></div>
           <div id="strDetail" style="font-family:var(--mono);font-size:1rem;color:var(--muted);"></div>
           <div id="strWeight" style="font-family:var(--mono);font-size:0.9rem;color:var(--muted);"></div>
+          <div id="strPrevSession" style="margin:0.35rem 0;display:none;"></div>
           <div id="strHr" style="display:none;align-items:center;gap:0.3rem;">
             <span id="strHrValue" style="font-family:var(--mono);font-size:1.3rem;font-weight:700;color:#e74c3c;">--</span>
             <span style="font-size:0.65rem;color:var(--muted);">bpm</span>
@@ -658,10 +680,9 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
               <div id="strTimerProgress" style="height:100%;background:var(--cyan);border-radius:3px;transition:width 1s linear;width:0;"></div>
             </div>
           </div>
-          <div id="strActions" style="margin-top:1rem;">
-            <button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button>
-            <button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>
-          </div>
+          <!-- Prompt-/completion-screen slot (connect belt, workout voltooid). The
+               per-set ▶/✓ buttons live in the bottom action row instead. -->
+          <div id="strActions" style="margin-top:0.5rem;display:none;"></div>
         </div>
       </div>
 
@@ -670,6 +691,8 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
     <div id="runBtnRow" class="runner-actions">
       <button class="btn btn-ghost hidden" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
       <button class="btn btn-ghost hidden" id="runBtnSkip" onclick="strSkipExercise()">⏭ Skip</button>
+      <button class="btn btn-cyan" id="strPlayBtn" onclick="strStartSet()" style="display:none;flex:1.4;">▶ Start</button>
+      <button class="btn btn-green" id="strCheckBtn" onclick="strNextSet()" style="flex:1.6;">✓ Voltooid</button>
       <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled style="flex:1;">⏹ Stop</button>
     </div>
   </div>
@@ -1675,7 +1698,10 @@ function renderEntries() {
           <button class="remove-btn" style="width:24px;height:24px;font-size:0.6rem;" onclick="moveEntry(${ei},1)" ${ei === editorEntries.length - 1 ? 'disabled' : ''}>▼</button>
         </div>
         ${imgHtml}
-        <span style="font-weight:700;flex:1;">${esc(ex.name)}</span>
+        <div style="flex:1;display:flex;flex-direction:column;gap:1px;">
+          <span style="font-weight:700;">${esc(ex.name)}</span>
+          ${ex.perSide ? `<span style="font-size:0.65rem;color:var(--amber);font-weight:600;">↔ Per zijde</span>` : ''}
+        </div>
         <button class="remove-btn" onclick="removeEntry(${ei})">×</button>
       </div>
       <div class="entry-body">${bodyHtml}</div>
@@ -1685,42 +1711,69 @@ function renderEntries() {
 
 function renderStrengthEditor(entry, ei, ex) {
   const prefix = `editorEntries[${ei}]`;
-  let html = `<div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;">`;
+  // Only strength exercises get the MAX ("beter dan vorige keer") whole-row toggle;
+  // stretches keep plain fields.
+  const canProgress = ex.type === 'strength';
+  const progressive = canProgress && !!entry.progressive;
+  // Focusing (tap/click) or editing any manual field drops MAX and returns to manual.
+  const onEdit = canProgress ? ` onfocus="setEntryFixed(${ei})"` : '';
 
-  html += `<div class="field">
+  let fields = `<div class="field">
     <label class="field-label">Sets</label>
     <input type="number" min="1" max="20" value="${entry.sets || 3}"
-      onchange="${prefix}.sets=+this.value" style="width:50px;">
+      onchange="${prefix}.sets=+this.value"${onEdit} style="width:48px;">
   </div>`;
 
   if (ex.measureBy === 'reps') {
-    html += `<div class="field">
+    fields += `<div class="field">
       <label class="field-label">Herhalingen</label>
       <input type="number" min="1" max="100" value="${entry.reps || 10}"
-        onchange="${prefix}.reps=+this.value" style="width:55px;">
+        onchange="${prefix}.reps=+this.value"${onEdit} style="width:54px;">
     </div>`;
   } else {
-    html += `<div class="field">
+    fields += `<div class="field">
       <label class="field-label">Seconden</label>
       <input type="number" min="1" max="300" step="5" value="${entry.duration || 30}"
-        onchange="${prefix}.duration=+this.value" style="width:55px;">
+        onchange="${prefix}.duration=+this.value"${onEdit} style="width:54px;">
     </div>`;
   }
 
   if (ex.weighted) {
-    html += `<div class="field">
+    fields += `<div class="field">
       <label class="field-label">Gewicht (kg)</label>
-      <input type="number" min="0" max="200" step="0.5" value="${entry.weight || 0}"
-        onchange="${prefix}.weight=+this.value" style="width:60px;">
+      <input type="number" min="0" max="200" step="2.5" value="${entry.weight || 0}"
+        onchange="${prefix}.weight=+this.value"${onEdit} style="width:58px;">
     </div>`;
   }
 
-  if (ex.perSide) {
-    html += `<div style="font-size:0.7rem;color:var(--amber);font-weight:600;">↔ Per zijde</div>`;
+  let html = `<div style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:stretch;width:100%;">`;
+  if (canProgress) {
+    html += `<div id="doelManual_${ei}" class="doel-manual${progressive ? '' : ' active'}" onclick="setEntryFixed(${ei})">${fields}</div>
+      <span class="doel-of">of</span>
+      <button type="button" id="doelMax_${ei}" class="doel-max${progressive ? ' active' : ''}"
+        onclick="toggleEntryMax(${ei})" title="Beter dan vorige keer: pak je max van de vorige sessie">MAX</button>`;
+  } else {
+    html += `<div style="display:flex;gap:0.75rem;align-items:end;">${fields}</div>`;
   }
 
   html += `</div>`;
   return html;
+}
+
+// Whole-row toggle. Tapping MAX flips the mode; typing in a manual field forces manual.
+// Updated in place (no re-render) so a focused input keeps its focus.
+function toggleEntryMax(ei) { editorEntries[ei].progressive = !editorEntries[ei].progressive; reflectDoel(ei); }
+function setEntryFixed(ei) {
+  if (!editorEntries[ei].progressive) return;
+  editorEntries[ei].progressive = false;
+  reflectDoel(ei);
+}
+function reflectDoel(ei) {
+  const prog = !!editorEntries[ei].progressive;
+  const man = document.getElementById('doelManual_' + ei);
+  const max = document.getElementById('doelMax_' + ei);
+  if (man) man.classList.toggle('active', !prog);
+  if (max) max.classList.toggle('active', prog);
 }
 
 function renderCardioEditor(entry, ei) {
@@ -2103,11 +2156,17 @@ function openPreview(id) {
         <div id="prevBody${idx}" style="display:none;padding:0 0.75rem 0.75rem;">${body}</div>
       </div>`;
     } else {
-      // Strength / stretch: compact card with details.
+      // Strength / stretch: compact card with details. The progressive (MAX) metric
+      // shows "🎯 MAX …" when chosen; secondary metrics show their planned value.
+      const primary = window.StrengthUI.primaryMetric(ex);
+      const maxLabel = { weight: 'MAX kg', reps: 'MAX reps', duration: 'MAX sec' }[primary];
       let detail = `${entry.sets || 0} sets`;
-      if (entry.reps) detail += ` × ${entry.reps} reps`;
-      if (entry.duration) detail += ` × ${entry.duration}s`;
-      if (entry.weight > 0) detail += ` · ${entry.weight} kg`;
+      if (ex.measureBy === 'reps' && primary !== 'reps' && entry.reps) detail += ` × ${entry.reps} reps`;
+      if (ex.measureBy === 'duration' && primary !== 'duration' && entry.duration) detail += ` × ${entry.duration}s`;
+      if (entry.progressive) detail += ` · 🎯 ${maxLabel}`;
+      else if (primary === 'reps' && entry.reps) detail += ` × ${entry.reps} reps`;
+      else if (primary === 'duration' && entry.duration) detail += ` × ${entry.duration}s`;
+      else if (primary === 'weight' && entry.weight > 0) detail += ` · ${entry.weight} kg`;
       if (ex.perSide) detail += ` · per zijde`;
 
       blocksHtml += `<div style="display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.75rem;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);margin-bottom:0.4rem;">
@@ -2159,6 +2218,9 @@ let confirmWaitInterval = null; // wall-clock start for total elapsed
 let strSetIndex = 0;
 let strSideIndex = 0;
 let strTimerTotal = 0;
+let strTargets = null;      // lastSessionTargets() for the active exercise ("beter dan vorige keer")
+let strProgressive = false; // active entry is in progressive mode
+let strPrefill = {};        // per-side carry-forward of captured values: { 0:{weight,reps,duration}, 1:{...} }
 let strTimerElapsed = 0;
 let strTimerActive = false;
 let strTimerInterval = null;
@@ -2170,6 +2232,12 @@ function showRunnerMode(mode) {
   document.getElementById('runnerChart').style.display = mode === 'cardio' ? '' : 'none';
   document.getElementById('runBtnPause').classList.toggle('hidden', mode !== 'cardio');
   document.getElementById('runBtnSkip').classList.remove('hidden');
+  // The ▶ Start / ✓ Voltooid buttons are strength-only; updateStrengthUI shows the
+  // right one when a set is active.
+  if (mode !== 'strength') {
+    document.getElementById('strPlayBtn').style.display = 'none';
+    document.getElementById('strCheckBtn').style.display = 'none';
+  }
 }
 
 async function startRunner() {
@@ -2194,8 +2262,10 @@ async function startRunner() {
   acquireWakeLock();
   showView('viewRunner');
   document.getElementById('runBtnStop').disabled = false;
-  // Restore strength UI buttons (may have been replaced by finish screen)
-  document.getElementById('strActions').innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+  // Clear any leftover prompt/completion content from a previous run.
+  const strActions = document.getElementById('strActions');
+  strActions.style.display = 'none';
+  strActions.innerHTML = '';
   await startCurrentEntry();
 }
 
@@ -2256,9 +2326,16 @@ function showEntryPrompt(title, subtitle, buttons) {
     document.getElementById('strExImg').style.display = 'none';
     document.getElementById('strExName').textContent = title;
     document.getElementById('strSetLabel').textContent = subtitle;
+    document.getElementById('strSideBadge').innerHTML = '';
     document.getElementById('strDetail').textContent = '';
     document.getElementById('strWeight').textContent = '';
+    document.getElementById('strPrevSession').style.display = 'none';
+    document.getElementById('strPrevSession').innerHTML = '';
     document.getElementById('strTimerArea').style.display = 'none';
+    // The prompt owns the screen: hide the per-set action buttons in the bottom bar.
+    document.getElementById('strPlayBtn').style.display = 'none';
+    document.getElementById('strCheckBtn').style.display = 'none';
+    document.getElementById('runBtnSkip').classList.add('hidden');
     const actions = document.getElementById('strActions');
     actions.style.display = '';
     actions.innerHTML = buttons.map(b =>
@@ -2270,8 +2347,10 @@ function showEntryPrompt(title, subtitle, buttons) {
         clearInterval(confirmWaitInterval); confirmWaitInterval = null;
         const choice = actions.dataset.choice;
         delete actions.dataset.choice;
-        // Restore buttons
-        actions.innerHTML = `<button id="strPlayBtn" class="btn btn-cyan" onclick="strStartSet()" style="display:none;width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">▶</button><button id="strCheckBtn" class="btn btn-green" onclick="strNextSet()" style="width:100px;height:100px;border-radius:50%;font-size:2.5rem;padding:0;">✓</button>`;
+        // Clear the prompt; the next entry (updateStrengthUI / cardio mode) restores the
+        // correct bottom-bar buttons.
+        actions.style.display = 'none';
+        actions.innerHTML = '';
         resolve(choice);
       }
     }, 100);
@@ -2331,18 +2410,44 @@ function startStrengthEntry(entry, ex) {
   hrSegDiscard();
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
 
+  // "Beter dan vorige keer": pull the most recent session for this exercise and seed
+  // the per-side prefill with its maxima (gewicht/reps/duur). Carry-forward then
+  // tracks what you actually do, per side.
+  strProgressive = !!entry.progressive;
+  strTargets = strProgressive ? window.Progress.lastSessionTargets(loadHistory(), entry.exerciseId) : null;
+  strPrefill = {};
+  if (strProgressive && strTargets) {
+    for (const side of (ex.perSide ? [0, 1] : [0])) {
+      strPrefill[side] = strGoalFor(entry, ex, side);
+    }
+  }
+
   const img = document.getElementById('strExImg');
   if (ex.imageUrl) { img.src = ex.imageUrl; img.style.display = ''; } else { img.style.display = 'none'; }
   document.getElementById('strExName').textContent = ex.name;
   document.getElementById('runBtnPause').disabled = true;
-  document.getElementById('strActions').style.display = '';
+  // strActions is only for the prompt/completion screens now; keep it out of the way.
+  document.getElementById('strActions').style.display = 'none';
+  document.getElementById('strActions').innerHTML = '';
   updateStrengthUI(entry, ex);
+}
+
+// The goal for one side: the planned entry values, with only the progressive (MAX)
+// metric replaced by this side's max from the last session.
+function strGoalFor(entry, ex, side) {
+  const planned = { weight: entry.weight || 0, reps: entry.reps || 0, duration: entry.duration || 0 };
+  if (!strProgressive || !strTargets) return planned;
+  const hist = window.StrengthUI.targetFor(strTargets, side, ex);
+  const primary = window.StrengthUI.primaryMetric(ex);
+  return { ...planned, [primary]: hist[primary] };
 }
 
 function bumpCap(id, delta) {
   const el = document.getElementById(id);
   if (!el) return;
-  const step = id === 'capWeight' ? 0.5 : 1;
+  // Weight steps in 2.5 kg (most machines/plates do); reps step by 1. Typing a free
+  // value in the input stays possible.
+  const step = id === 'capWeight' ? window.StrengthUI.WEIGHT_STEP : 1;
   const v = (parseFloat(el.value) || 0) + delta * step;
   el.value = Math.max(0, Math.round(v * 10) / 10);
 }
@@ -2354,18 +2459,38 @@ function updateStrengthUI(entry, ex) {
 
   const totalSets = entry.sets || 1;
   const sides = ex.perSide ? 2 : 1;
-  const sideLabel = ex.perSide ? (strSideIndex === 0 ? ' · Links' : ' · Rechts') : '';
   const setNum = strSetIndex * sides + strSideIndex + 1;
 
-  document.getElementById('strSetLabel').textContent = `Set ${setNum}/${totalSets * sides}${sideLabel}`;
+  document.getElementById('strSetLabel').textContent = `Set ${setNum}/${totalSets * sides}`;
+
+  // Coloured leg badge (blauw Links / oranje Rechts) for every per-side exercise.
+  document.getElementById('strSideBadge').innerHTML =
+    window.StrengthUI.sideBadgeHtml(strSideIndex, ex.perSide, { colLeft: CHART_COL.left, colRight: CHART_COL.right });
+
+  // "Beter dan vorige keer": goal = planned values with the MAX metric taken from this
+  // leg's last session (constant); the capture field prefills from the per-side
+  // carry-forward (seeded with that goal). Otherwise goal/prefill = the planned values.
+  const side = ex.perSide ? strSideIndex : 0;
+  const goal = strGoalFor(entry, ex, side);
+  const pf = (strProgressive && strTargets && strPrefill[side]) ? strPrefill[side] : goal;
+
+  // Previous-session reference panel (progressive mode only).
+  const prev = document.getElementById('strPrevSession');
+  if (strProgressive) {
+    prev.style.display = '';
+    prev.innerHTML = window.StrengthUI.prevSessionPanelHtml(strTargets, ex, { colLeft: CHART_COL.left, colRight: CHART_COL.right });
+  } else {
+    prev.style.display = 'none';
+    prev.innerHTML = '';
+  }
 
   if (ex.measureBy === 'reps') {
-    document.getElementById('strDetail').textContent = `Doel: ${entry.reps || 0} reps`;
+    document.getElementById('strDetail').textContent = `Doel: ${goal.reps || 0} reps`;
   } else {
-    document.getElementById('strDetail').textContent = `${entry.duration || 0} seconden`;
-    strTimerTotal = entry.duration || 0;
+    strTimerTotal = goal.duration || 0;
+    document.getElementById('strDetail').textContent = `${strTimerTotal} seconden`;
   }
-  document.getElementById('strWeight').textContent = entry.weight > 0 ? `${entry.weight} kg` : '';
+  document.getElementById('strWeight').textContent = goal.weight > 0 ? `${window.StrengthUI.fmtKg(goal.weight)} kg` : '';
 
   const capWrap = document.getElementById('strCapture');
   if (ex.measureBy === 'reps') {
@@ -2379,11 +2504,11 @@ function updateStrengthUI(entry, ex) {
     capWrap.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:0.15rem;">
         <span style="font-size:0.7rem;color:var(--muted);">Gedaan (reps)</span>
-        ${stepper('capReps', entry.reps || 0, 52, 'min="0" max="100"')}
+        ${stepper('capReps', pf.reps || 0, 52, 'min="0" max="100"')}
       </div>
       ${ex.weighted ? `<div style="display:flex;flex-direction:column;align-items:center;gap:0.15rem;">
         <span style="font-size:0.7rem;color:var(--muted);">kg</span>
-        ${stepper('capWeight', entry.weight || 0, 60, 'min="0" max="500" step="0.5"')}
+        ${stepper('capWeight', pf.weight || 0, 60, 'min="0" max="500" step="2.5"')}
       </div>` : ''}
     `;
   } else {
@@ -2501,6 +2626,13 @@ function strNextSet() {
   }
   window.runLog[entry.exerciseId].sets.push(set);
 
+  // Progressive mode: carry what you actually did forward to the next set of the same
+  // leg (so set 2 Links starts where set 1 Links ended, not back at the history max).
+  if (strProgressive && strTargets) {
+    const key = ex.perSide ? (set.side || 0) : 0;
+    strPrefill[key] = { weight: set.weight || 0, reps: set.reps || 0, duration: set.duration || 0 };
+  }
+
   const sides = ex.perSide ? 2 : 1;
   strSideIndex++;
   if (strSideIndex >= sides) { strSideIndex = 0; strSetIndex++; }
@@ -2573,11 +2705,16 @@ async function finishWorkout() {
   document.getElementById('strExImg').style.display = 'none';
   document.getElementById('strExName').textContent = '';
   document.getElementById('strSetLabel').textContent = '';
+  document.getElementById('strSideBadge').innerHTML = '';
   document.getElementById('strDetail').textContent = '';
   document.getElementById('strWeight').textContent = '';
+  document.getElementById('strPrevSession').style.display = 'none';
+  document.getElementById('strPrevSession').innerHTML = '';
   document.getElementById('strTimerArea').style.display = 'none';
   document.getElementById('runBtnPause').disabled = true;
   document.getElementById('runBtnSkip').classList.add('hidden');
+  document.getElementById('strPlayBtn').style.display = 'none';
+  document.getElementById('strCheckBtn').style.display = 'none';
 
   const wkForUpdate = loadWorkouts().find(w => w.id === previewWorkoutId);
   const changed = [];
@@ -3473,6 +3610,8 @@ window.APP = {
   window.HR = HR;
   import * as Chart from './src/chart.js';
   window.Chart = Chart;
+  import * as StrengthUI from './src/strength-ui.js';
+  window.StrengthUI = StrengthUI;
 
   const gate = document.getElementById('authGate');
   const signInBtn = document.getElementById('authSignInBtn');
