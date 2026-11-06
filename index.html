@@ -372,6 +372,38 @@ input:focus { border-color:var(--cyan); }
 .exercise-card-name { font-weight:700; font-size:0.85rem; }
 .exercise-card-meta { font-size:0.65rem; color:var(--muted); margin-top:0.1rem; }
 
+/* Home-screen exercise grid: grouped, vertical cards (3 cols on mobile). */
+.exercise-group-title {
+  font-family:var(--mono); font-size:0.7rem; font-weight:700; letter-spacing:0.04em;
+  text-transform:uppercase; color:var(--muted);
+  margin:0.9rem 0 0.45rem; padding-bottom:0.2rem; border-bottom:1px solid var(--border);
+}
+.exercise-group-title:first-child { margin-top:0; }
+.exercise-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:0.5rem; margin-bottom:0.3rem; }
+@media (min-width:600px) {
+  .exercise-grid { grid-template-columns:repeat(auto-fill, minmax(140px, 1fr)); }
+}
+.ex-card {
+  display:flex; flex-direction:column; background:var(--s1);
+  border:1px solid var(--border); border-radius:var(--r);
+  overflow:hidden; cursor:pointer; transition:border-color 0.15s;
+}
+.ex-card:hover { border-color:var(--cyan); }
+.ex-card-imgwrap { position:relative; width:100%; aspect-ratio:1/1; background:var(--s2); }
+.ex-card-img { width:100%; height:100%; object-fit:cover; display:block; background:var(--s2); }
+.ex-card-img-ph { position:absolute; inset:0; align-items:center; justify-content:center; font-size:1.6rem; color:var(--muted); }
+.ex-card-name {
+  font-weight:700; font-size:0.78rem; line-height:1.15;
+  margin:0.4rem 0.45rem 0.1rem; min-height:2.3em;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+}
+.ex-card-type { font-size:0.62rem; color:var(--muted); margin:0 0.45rem; }
+.ex-card-badges { display:flex; flex-wrap:wrap; gap:0.2rem; margin:0.25rem 0.45rem 0.5rem; }
+.ex-card-badge {
+  font-size:0.56rem; font-family:var(--mono); color:var(--muted);
+  background:var(--s2); border-radius:var(--r-sm); padding:0.05rem 0.3rem;
+}
+
 .entry-block {
   background:var(--s1); border:1px solid var(--border); border-radius:var(--r);
   margin-bottom:0.5rem; overflow:hidden;
@@ -747,7 +779,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 function loadWorkouts() { return window.DB.workouts(); }
 
 // Bump when the category/measurement/image of a default exercise changes.
-const DEFAULTS_VERSION = 2;
+const DEFAULTS_VERSION = 3;
 
 // Default exercise library. Images live in ./images/ (relative paths).
 // type = 'cardio' | 'strength' | 'stretch' (wat je doet).
@@ -766,6 +798,7 @@ const DEFAULT_EXERCISES = [
   { id:'ex_back_extension', name:'Back Extension', imageUrl:'images/back-extension.c63a09.gif', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
   { id:'ex_box_jump', name:'Box Jump', imageUrl:'images/box-jump.gif', type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false },
   { id:'ex_chinese_plank', name:'Chinese Plank', imageUrl:'images/chinese-plank.png', type:'strength', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
+  { id:'ex_plank', name:'Plank', imageUrl:'images/plank.png', type:'strength', perSide:false, measureBy:'duration', weighted:false, bleConnectable:false },
   { id:'ex_glute_ham_isometric', name:'Glute-Ham Isometric', imageUrl:'images/glute-ham-isometric.webp', type:'strength', perSide:false, measureBy:'reps', weighted:true, bleConnectable:false },
   { id:'ex_nordic_hamstring_curl', name:'Nordic Hamstring Curl', imageUrl:'images/nordic_curls_1200x1200_crop_center.webp', type:'strength', perSide:false, measureBy:'reps', weighted:false, bleConnectable:false },
   { id:'ex_ball_hamstring_curl', name:'Ball Hamstring Curl', imageUrl:'images/oneleghamstringcurlexerciseballtrainerplusapp-ezgif.com-crop.gif', type:'strength', perSide:true, measureBy:'reps', weighted:false, bleConnectable:false },
@@ -789,6 +822,30 @@ const DEFAULT_EXERCISES = [
   { id:'ex_quadriceps_lying_stretch', name:'Quadriceps Lying Stretch', imageUrl:'images/Kneeling-Quad-Stretch.gif', type:'stretch', perSide:true, measureBy:'duration', weighted:false, bleConnectable:false },
 ];
 
+// Home-list grouping. A fixed, code-maintained mapping separate from `type`
+// (e.g. Box Jump is type:strength but lives under Plyometrics). Arrays decide
+// membership + group order; cards within a group are sorted by name at render.
+// Any exercise whose id is in no group falls into an "Overig" bucket at the end.
+const EXERCISE_GROUPS = [
+  { name: 'Legs', ids: [
+    'ex_ball_hamstring_curl','ex_bulgarian_split_squat','ex_deadlift',
+    'ex_hamstring_curl','ex_leg_extension','ex_lunges','ex_nordic_hamstring_curl',
+    'ex_one_leg_calf_raise','ex_single_leg_calf_press','ex_single_leg_deadlift',
+    'ex_single_leg_press','ex_sliding_leg','ex_split_squat','ex_squat','ex_step_up',
+  ] },
+  { name: 'Core', ids: [
+    'ex_back_extension','ex_chinese_plank','ex_glute_ham_isometric','ex_plank',
+  ] },
+  { name: 'Plyometrics', ids: ['ex_box_jump'] },
+  { name: 'Stretch', ids: [
+    'ex_leg_up_hamstring_stretch','ex_lying_glute_stretch','ex_kneeling_hip_flexor',
+    'ex_seated_hamstring_stretch','ex_extended_leg_hip_bridge','ex_quadriceps_lying_stretch',
+  ] },
+  { name: 'Cardio', ids: [
+    'ex_hardlopen','ex_cross_trainer','ex_cycling','ex_rope_jump',
+  ] },
+];
+
 // Icon + meta-label per exercise, used across home list, picker, editor and preview.
 function exIcon(ex) {
   return ex.type === 'cardio' ? '🏃' : ex.type === 'stretch' ? '🧘' : '💪';
@@ -797,6 +854,10 @@ function exMeta(ex) {
   if (ex.type === 'cardio') return ex.bleConnectable ? '🏃 Cardio · loopband' : '🏃 Cardio · timer';
   const cat = ex.type === 'stretch' ? '🧘 Stretch' : '💪 Kracht';
   return `${cat}${ex.perSide ? ' · per zijde' : ''}${ex.weighted ? ' · gewicht' : ''}`;
+}
+// Short human type label (no modifiers), used on the home grid cards.
+function exTypeLabel(ex) {
+  return ex.type === 'cardio' ? 'Cardio' : ex.type === 'stretch' ? 'Stretch' : 'Kracht';
 }
 // True when an exercise drives the treadmill timeline; everything else uses the set/timer screen.
 function usesTreadmill(ex) { return !!(ex && ex.bleConnectable); }
@@ -881,25 +942,47 @@ function renderWorkoutList() {
 
 function renderExerciseList() {
   const list = loadExercises();
+  const byId = new Map(list.map(ex => [ex.id, ex]));
+  const used = new Set();
+  const groups = [];
+  // Fixed groups first; members present in the user's list, sorted by name.
+  for (const g of EXERCISE_GROUPS) {
+    const members = g.ids
+      .map(id => byId.get(id))
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+    members.forEach(ex => used.add(ex.id));
+    if (members.length) groups.push({ name: g.name, members });
+  }
+  // Anything not in the mapping (e.g. a custom exercise) → "Overig" at the end.
+  const leftovers = list.filter(ex => !used.has(ex.id))
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+  if (leftovers.length) groups.push({ name: 'Overig', members: leftovers });
+
   const el = document.getElementById('exerciseList');
-  el.innerHTML = list.map(ex => {
-    const meta = exMeta(ex);
-    const imgHtml = ex.imageUrl
-      ? `<img class="exercise-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
-      : '';
-    return `<div class="exercise-card" onclick="openExerciseDetail('${ex.id}')">
-      <div style="position:relative;">
-        ${imgHtml}
-        <div class="exercise-img" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}align-items:center;justify-content:center;font-size:1.2rem;color:var(--muted);">${exIcon(ex)}</div>
-      </div>
-      <div class="exercise-card-info">
-        <div class="exercise-card-name">${esc(ex.name)}</div>
-        <div class="exercise-card-meta">${meta}</div>
-      </div>
-      <button class="btn-icon" style="width:32px;height:32px;font-size:0.75rem;" onclick="event.stopPropagation();openExerciseEditor('${ex.id}')">✏️</button>
-      ${ex.id !== 'ex_hardlopen' ? `<button class="btn-icon" style="width:32px;height:32px;font-size:0.75rem;" onclick="event.stopPropagation();deleteExercise('${ex.id}')">🗑</button>` : ''}
-    </div>`;
-  }).join('');
+  el.innerHTML = groups.map(g => `
+    <div class="exercise-group-title">${esc(g.name)}</div>
+    <div class="exercise-grid">${g.members.map(exCardHtml).join('')}</div>`).join('');
+}
+
+// One vertical card for the home grid: image on top, then name (≤2 lines),
+// type label and per-side / weight badges. No edit/delete here — those live in
+// the detail view.
+function exCardHtml(ex) {
+  const imgHtml = ex.imageUrl
+    ? `<img class="ex-card-img" src="${esc(ex.imageUrl)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+    : '';
+  const badges = [ex.perSide ? 'per zijde' : '', ex.weighted ? 'gewicht' : '']
+    .filter(Boolean).map(b => `<span class="ex-card-badge">${b}</span>`).join('');
+  return `<div class="ex-card" onclick="openExerciseDetail('${ex.id}')">
+    <div class="ex-card-imgwrap">
+      ${imgHtml}
+      <div class="ex-card-img ex-card-img-ph" style="${ex.imageUrl ? 'display:none;' : 'display:flex;'}">${exIcon(ex)}</div>
+    </div>
+    <div class="ex-card-name">${esc(ex.name)}</div>
+    <div class="ex-card-type">${exIcon(ex)} ${esc(exTypeLabel(ex))}</div>
+    <div class="ex-card-badges">${badges}</div>
+  </div>`;
 }
 
 function deleteWorkout(id) {
@@ -909,9 +992,25 @@ function deleteWorkout(id) {
 }
 
 function deleteExercise(id) {
-  if (!confirm('Oefening verwijderen?')) return;
+  const ex = getExercise(id);
+  const name = ex ? ex.name : 'Oefening';
+  const sessionCount = loadHistory().filter(s => (s.exercises || []).some(e => e.exerciseId === id)).length;
+  const workoutCount = loadWorkouts().filter(w => (w.entries || []).some(e => e.exerciseId === id)).length;
+  let msg;
+  if (sessionCount || workoutCount) {
+    const used = [];
+    if (sessionCount) used.push(`${sessionCount} sessie${sessionCount === 1 ? '' : 's'}`);
+    if (workoutCount) used.push(`${workoutCount} workout${workoutCount === 1 ? '' : 's'}`);
+    const cons = [];
+    if (sessionCount) cons.push('de geschiedenis blijft bewaard maar is daarna niet meer te openen via deze oefening');
+    if (workoutCount) cons.push("die workouts tonen '?' op die plek");
+    msg = `'${name}' verwijderen?\n\nGebruikt in ${used.join(' en ')}. ${cons.join('; ')}.\n\nZeker weten?`;
+  } else {
+    msg = `'${name}' verwijderen? Zeker weten?`;
+  }
+  if (!confirm(msg)) return;
   window.DB.deleteExercise(id);
-  renderExerciseList();
+  showView('viewHome');
 }
 
 function renderHistory() {
@@ -1004,10 +1103,16 @@ function renderExerciseDetail(id) {
   const st = window.Progress.statsForExercise(sessions, id);
 
   document.getElementById('exDetailHeader').innerHTML = `
-    <div class="row" style="gap:0.75rem;align-items:center;">
-      ${ex.imageUrl ? `<img src="${esc(ex.imageUrl)}" style="width:56px;height:56px;object-fit:cover;border-radius:var(--r-sm);">` : ''}
-      <div><div style="font-weight:700;font-size:1.1rem;">${esc(ex.name)}</div>
-      <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${esc(ex.type)}</div></div>
+    <div class="row" style="gap:0.75rem;align-items:flex-start;justify-content:space-between;">
+      <div class="row" style="gap:0.75rem;align-items:center;min-width:0;">
+        ${ex.imageUrl ? `<img src="${esc(ex.imageUrl)}" style="width:56px;height:56px;object-fit:cover;border-radius:var(--r-sm);flex-shrink:0;">` : ''}
+        <div style="min-width:0;"><div style="font-weight:700;font-size:1.1rem;">${esc(ex.name)}</div>
+        <div style="color:var(--muted);font-size:0.8rem;">${exIcon(ex)} ${esc(ex.type)}</div></div>
+      </div>
+      <div class="row" style="gap:0.25rem;flex-shrink:0;">
+        <button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" title="Aanpassen" onclick="openExerciseEditor('${ex.id}')">✏️</button>
+        ${ex.id !== 'ex_hardlopen' ? `<button class="btn-icon" style="width:36px;height:36px;font-size:0.85rem;" title="Verwijderen" onclick="deleteExercise('${ex.id}')">🗑</button>` : ''}
+      </div>
     </div>`;
 
   // Stats row: count (left) · PR + current (centre) · last date/time (right).
@@ -1611,6 +1716,21 @@ function saveExercise() {
     weighted: exState.type === 'strength' ? exState.weighted : false,
     bleConnectable: isCardio ? exState.bleConnectable : false,
   };
+  // Changing how an exercise is measured re-interprets ALL past sessions in the
+  // detail chart/tables (they're read with the exercise's current flags). Warn
+  // before saving such a change when history already exists. Name/image are safe.
+  if (existing) {
+    const changed = [];
+    if (existing.type !== ex.type) changed.push('type');
+    if (!!existing.perSide !== !!ex.perSide) changed.push('per zijde');
+    if (!!existing.weighted !== !!ex.weighted) changed.push('gewicht');
+    if ((existing.measureBy ?? null) !== (ex.measureBy ?? null)) changed.push('meeteenheid');
+    const sessionCount = loadHistory().filter(s => (s.exercises || []).some(e => e.exerciseId === existing.id)).length;
+    if (changed.length && sessionCount) {
+      const n = sessionCount === 1 ? '1 sessie' : `${sessionCount} sessies`;
+      if (!confirm(`Je hebt al ${n} met deze oefening. Je wijzigt ${changed.join(', ')}. Dat kan de grafiek en tabellen van eerdere sessies anders of leeg tonen (de data zelf blijft bewaard). Toch opslaan?`)) return;
+    }
+  }
   window.DB.upsertExercise(ex);
   showView('viewHome');
 }
