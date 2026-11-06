@@ -114,6 +114,11 @@ input:focus { border-color:var(--cyan); }
 .conn-dot.on { background:var(--green); box-shadow:0 0 8px rgba(5,150,105,0.4); }
 .conn-label { font-family:var(--mono); font-size:0.75rem; flex:1; }
 
+/* Slim connection bar for the space-constrained runner */
+.conn-slim { padding:0.3rem 0.6rem; margin-bottom:0.25rem; gap:0.45rem; }
+.conn-slim .conn-label { font-size:0.65rem; }
+#runnerConn { flex:0 0 auto; padding:0.35rem 0.35rem 0; }
+
 /* ============================================
    VIEW: HOME
    ============================================ */
@@ -307,7 +312,9 @@ input:focus { border-color:var(--cyan); }
   background:var(--s1); border:1px solid var(--border);
   border-radius:var(--r); padding:0.5rem 0.65rem; margin-bottom:0.25rem;
 }
-/* Exercise navigation strip (top of the runner) */
+/* Exercise navigation strip (top of the runner) + fullscreen toggle, on one row */
+#runNavRow { flex:0 0 auto; display:flex; align-items:center; }
+#runNavRow > #runNavStrip { flex:1 1 auto; min-width:0; }
 #runNavStrip {
   flex:0 0 auto; display:flex; align-items:center; justify-content:safe center; gap:0;
   padding:0.5rem 0.5rem 0.35rem; overflow-x:auto; overflow-y:hidden;
@@ -335,6 +342,8 @@ input:focus { border-color:var(--cyan); }
 
 @media (orientation:landscape) {
   #runnerLayout { flex-direction:row; flex-wrap:wrap; }
+  #runNavRow { flex:0 0 100%; }
+  #runnerConn { flex:0 0 100%; }
   #runnerChart { flex:0 0 45%; max-height:none; height:calc(100% - 50px); }
   #runnerControls { flex:0 0 55%; height:calc(100% - 50px); }
   #runBtnRow { flex:0 0 100%; position:sticky; bottom:0; }
@@ -463,22 +472,6 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
 </div>
 <div class="app">
 
-<!-- Connection bars (global) -->
-<div id="globalConn">
-  <div class="conn">
-    <div class="conn-dot" id="dot"></div>
-    <span class="conn-label" id="connLabel">Niet verbonden</span>
-    <button class="btn btn-cyan btn-sm" id="btnConn" onclick="bleConnect()">Loopband</button>
-    <button class="btn btn-ghost btn-sm hidden" id="btnDisc" onclick="bleDisconnect()">Verbreek</button>
-  </div>
-  <div class="conn">
-    <div class="conn-dot" id="hrDot"></div>
-    <span class="conn-label" id="hrLabel">Geen HR monitor</span>
-    <button class="btn btn-sm" id="btnHrConn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
-    <button class="btn btn-ghost btn-sm hidden" id="btnHrDisc" onclick="hrDisconnect()">Verbreek</button>
-  </div>
-</div>
-
 <!-- =========================================
      VIEW: HOME
      ========================================= -->
@@ -486,7 +479,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
   <div class="logo">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:-1rem;">
       <button id="authSignOutBtn" title="Uitloggen" style="display:none;background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1rem;cursor:pointer;align-items:center;justify-content:center;">⎋</button>
-      <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
+      <button id="settingsBtn" title="Instellingen" onclick="showView('viewSettings')" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">⚙</button>
     </div>
     <div class="logo-title">Workout<span>Ctrl</span></div>
     <div class="logo-sub">Treadmill &amp; Strength Workout Controller</div>
@@ -515,6 +508,35 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       <h3><span id="historyArrow">▸</span> Geschiedenis</h3>
     </div>
     <div id="historyList" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- =========================================
+     VIEW: SETTINGS
+     ========================================= -->
+<div class="view" id="viewSettings">
+  <div class="editor-header">
+    <button class="btn-icon" onclick="showView('viewHome')" style="font-size:1rem;">←</button>
+    <span style="font-weight:700;font-size:1rem;">Instellingen</span>
+  </div>
+
+  <div class="conn" style="justify-content:space-between;">
+    <span class="conn-label" style="flex:0;">Thema</span>
+    <button id="themeToggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border);border-radius:50%;width:36px;height:36px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center;">🌙</button>
+  </div>
+
+  <div class="conn">
+    <div class="conn-dot js-conn-dot"></div>
+    <span class="conn-label js-conn-label">Niet verbonden</span>
+    <button class="btn btn-cyan btn-sm js-btn-conn" onclick="bleConnect()">Loopband</button>
+    <button class="btn btn-ghost btn-sm hidden js-btn-disc" onclick="bleDisconnect()">Verbreek</button>
+  </div>
+
+  <div class="conn">
+    <div class="conn-dot js-hr-dot"></div>
+    <span class="conn-label js-hr-label">Geen HR monitor</span>
+    <button class="btn btn-sm js-btn-hr-conn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
+    <button class="btn btn-ghost btn-sm hidden js-btn-hr-disc" onclick="hrDisconnect()">Verbreek</button>
   </div>
 </div>
 
@@ -630,6 +652,20 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
   <div id="previewChart" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem 0.5rem 0.25rem 0.5rem;margin-bottom:0.75rem;overflow:hidden;"></div>
   <div id="previewLogControls" style="margin-bottom:0.75rem;"></div>
   <div id="previewBlocks" style="margin-bottom:1rem;"></div>
+  <div id="previewConn" style="margin-top:0.5rem;">
+    <div class="conn">
+      <div class="conn-dot js-hr-dot"></div>
+      <span class="conn-label js-hr-label">Geen HR monitor</span>
+      <button class="btn btn-sm js-btn-hr-conn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR Verbind</button>
+      <button class="btn btn-ghost btn-sm hidden js-btn-hr-disc" onclick="hrDisconnect()">Verbreek</button>
+    </div>
+    <div class="conn" id="previewConnTreadmill">
+      <div class="conn-dot js-conn-dot"></div>
+      <span class="conn-label js-conn-label">Niet verbonden</span>
+      <button class="btn btn-cyan btn-sm js-btn-conn" onclick="bleConnect()">Loopband</button>
+      <button class="btn btn-ghost btn-sm hidden js-btn-disc" onclick="bleDisconnect()">Verbreek</button>
+    </div>
+  </div>
   <button class="btn btn-green btn-full" onclick="startRunner()" style="padding:1rem;font-size:1.1rem;font-weight:800;">
     ▶ Start Workout
   </button>
@@ -661,13 +697,28 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       <div style="font-family:var(--ui);font-size:0.8rem;color:rgba(255,255,255,0.7);margin-bottom:1.5rem;">De app probeert de loopband te stoppen.<br>Vertrouw hier NIET op — gebruik altijd de fysieke noodstop.</div>
       <button id="emergencyDismissBtn" onclick="dismissEmergency()" disabled style="font-family:var(--ui);font-weight:700;font-size:1rem;padding:1rem 2rem;border-radius:var(--r);background:#fff;color:#dc2626;border:none;cursor:pointer;">Wacht...</button>
     </div>
-    <!-- Top: exercise navigation strip (numbered circles, tap to jump) -->
-    <div id="runNavStrip"></div>
+    <!-- Top: exercise navigation strip (numbered circles, tap to jump) + fullscreen toggle -->
+    <div id="runNavRow">
+      <div id="runNavStrip"></div>
+      <button id="runFsBtn" onclick="toggleFullscreen()" title="Volledig scherm" aria-label="Volledig scherm"
+        style="flex:0 0 auto;width:38px;height:38px;border-radius:9px;background:var(--s2);color:var(--text);display:flex;align-items:center;justify-content:center;margin:0 0.4rem;"></button>
+    </div>
 
-    <!-- Fullscreen toggle (opt-in), top-right just under the nav strip -->
-    <button id="runFsBtn" onclick="toggleFullscreen()" title="Volledig scherm" aria-label="Volledig scherm"
-      style="position:absolute;top:50px;right:10px;z-index:20;width:38px;height:38px;border-radius:9px;background:var(--s2);color:var(--text);display:flex;align-items:center;justify-content:center;"></button>
-
+    <!-- Slim reconnect bar: HR always, Loopband only for a run workout -->
+    <div id="runnerConn">
+      <div class="conn conn-slim">
+        <div class="conn-dot js-hr-dot"></div>
+        <span class="conn-label js-hr-label">Geen HR monitor</span>
+        <button class="btn btn-sm js-btn-hr-conn" onclick="hrConnect()" style="background:#e74c3c;color:#fff;">❤ HR</button>
+        <button class="btn btn-ghost btn-sm hidden js-btn-hr-disc" onclick="hrDisconnect()">Verbreek</button>
+      </div>
+      <div class="conn conn-slim" id="runnerConnTreadmill">
+        <div class="conn-dot js-conn-dot"></div>
+        <span class="conn-label js-conn-label">Niet verbonden</span>
+        <button class="btn btn-cyan btn-sm js-btn-conn" onclick="bleConnect()">Loopband</button>
+        <button class="btn btn-ghost btn-sm hidden js-btn-disc" onclick="bleDisconnect()">Verbreek</button>
+      </div>
+    </div>
     <!-- Left / Top: Chart -->
     <div id="runnerChart">
       <div id="runChartWrap" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem 0.4rem 0.2rem 0.4rem;overflow:hidden;height:100%;">
@@ -2234,6 +2285,10 @@ function openPreview(id) {
   const w = migrateWorkout(raw);
   const entries = w.entries || [];
 
+  // Treadmill connect bar only when the workout actually drives the belt; HR bar always.
+  const hasRun = entries.some(e => usesTreadmill(getExercise(e.exerciseId)));
+  document.getElementById('previewConnTreadmill').style.display = hasRun ? '' : 'none';
+
   document.getElementById('previewName').textContent = w.name;
 
   // --- Header: total minutes (duration-based exercises) + count of the rest ---
@@ -2472,6 +2527,10 @@ async function startRunner() {
   const wk = migrateWorkout(raw);
   runEntries = wk.entries || [];
   if (!runEntries.length) { alert('Workout is leeg'); return; }
+
+  // Slim treadmill reconnect bar only when this workout drives the belt; HR bar always.
+  const hasRun = runEntries.some(e => usesTreadmill(getExercise(e.exerciseId)));
+  document.getElementById('runnerConnTreadmill').style.display = hasRun ? '' : 'none';
 
   runEntryIndex = 0;
   runNav = window.SessionNav.createSession(runEntries.length);
@@ -3282,6 +3341,10 @@ function updateRunUI() {
   const step = runSteps[runIndex];
   if (!step) return;
 
+  // Elapsed WITHIN this cardio entry (not the whole-workout runTotalElapsed). Drives
+  // both the belt-spin-up grace window below and the chart position line.
+  const entryElapsed = window.RunChart.entryElapsedSec(runSteps, runIndex, runSegElapsed);
+
   // Current speed and pace (planned)
   document.getElementById('runSpeed').textContent = step.speed.toFixed(1);
   document.getElementById('runPace').textContent = step.speed > 0 ? kmhToPace(step.speed) : '--:--';
@@ -3304,8 +3367,11 @@ function updateRunUI() {
       actualEl.style.color = diff > 1.0 ? 'var(--red)' : 'var(--muted)';
       actualEl.style.display = '';
 
-      // Mismatch: includes actual=0 when target>0 (belt didn't start)
-      if (diff > 2.0 && runTotalElapsed > 8) {
+      // Mismatch: includes actual=0 when target>0 (belt didn't start). The 8s grace
+      // is counted from the START of THIS entry so the belt has time to spin up —
+      // runTotalElapsed (whole workout) skipped the grace on every entry after the
+      // first, causing a false emergency stop while the belt was still accelerating.
+      if (diff > 2.0 && entryElapsed > 8) {
         speedMismatchCount++;
         if (speedMismatchCount >= MISMATCH_THRESHOLD) {
           enterEmergency(`Snelheid wijkt al ${MISMATCH_THRESHOLD}s af!\nDoel: ${step.speed} km/h — Werkelijk: ${actualSpeed.toFixed(1)} km/h`);
@@ -3348,8 +3414,10 @@ function updateRunUI() {
     nextBox.style.display = 'none';
   }
 
-  // Chart position line + dim overlay
-  const posX = CH_PL + (runTotalElapsed / runTotalDuration) * CH_PLOTW;
+  // Chart position line + dim overlay. Uses the per-entry elapsed (see top) so the
+  // line stays locked to the bars, which are scaled to runTotalDuration — otherwise a
+  // preceding entry (e.g. cycling) pushes the line ahead.
+  const posX = CH_PL + (entryElapsed / runTotalDuration) * CH_PLOTW;
   const posLine = document.getElementById('runPosLine');
   const dimRect = document.getElementById('runDimRect');
   if (posLine) { posLine.setAttribute('x1', posX); posLine.setAttribute('x2', posX); }
@@ -3449,10 +3517,10 @@ function isRunnerActive() {
 }
 
 function updateConnUI(connected) {
-  document.getElementById('dot').className = connected ? 'conn-dot on' : 'conn-dot';
-  document.getElementById('connLabel').textContent = connected ? bleDevice?.name || 'Verbonden' : 'Niet verbonden';
-  document.getElementById('btnConn').classList.toggle('hidden', connected);
-  document.getElementById('btnDisc').classList.toggle('hidden', !connected);
+  document.querySelectorAll('.js-conn-dot').forEach(el => el.classList.toggle('on', connected));
+  document.querySelectorAll('.js-conn-label').forEach(el => el.textContent = connected ? (bleDevice?.name || 'Verbonden') : 'Niet verbonden');
+  document.querySelectorAll('.js-btn-conn').forEach(el => el.classList.toggle('hidden', connected));
+  document.querySelectorAll('.js-btn-disc').forEach(el => el.classList.toggle('hidden', !connected));
 }
 
 const delay = ms => new Promise(r => setTimeout(r, ms));
@@ -3790,10 +3858,10 @@ function hrDisconnect() {
 }
 
 function updateHrUI(connected) {
-  document.getElementById('hrDot').className = connected ? 'conn-dot on' : 'conn-dot';
-  document.getElementById('hrLabel').textContent = connected ? `❤ ${hrDevice?.name || 'HR Monitor'}` : 'Geen HR monitor';
-  document.getElementById('btnHrConn').classList.toggle('hidden', connected);
-  document.getElementById('btnHrDisc').classList.toggle('hidden', !connected);
+  document.querySelectorAll('.js-hr-dot').forEach(el => el.classList.toggle('on', connected));
+  document.querySelectorAll('.js-hr-label').forEach(el => el.textContent = connected ? `❤ ${hrDevice?.name || 'HR Monitor'}` : 'Geen HR monitor');
+  document.querySelectorAll('.js-btn-hr-conn').forEach(el => el.classList.toggle('hidden', connected));
+  document.querySelectorAll('.js-btn-hr-disc').forEach(el => el.classList.toggle('hidden', !connected));
 
   const hrDisplay = document.getElementById('runHrDisplay');
   if (hrDisplay) hrDisplay.style.display = connected ? '' : 'none';
@@ -3821,7 +3889,7 @@ function onHeartRate(event) {
   if (strEl) strEl.textContent = currentHR;
 
   // Update connection bar
-  document.getElementById('hrLabel').textContent = `❤ ${currentHR} bpm`;
+  document.querySelectorAll('.js-hr-label').forEach(el => el.textContent = `❤ ${currentHR} bpm`);
 
   // Sample into the active segment, throttled to ~1 reading / 2s to keep storage tiny.
   if (hrSeg && !hrSamplingPaused && currentHR > 0) {
@@ -3987,6 +4055,8 @@ window.APP = {
   window.StrengthUI = StrengthUI;
   import * as SessionNav from './src/session-nav.js';
   window.SessionNav = SessionNav;
+  import * as RunChart from './src/run-chart.js';
+  window.RunChart = RunChart;
 
   const gate = document.getElementById('authGate');
   const signInBtn = document.getElementById('authSignInBtn');
