@@ -730,6 +730,7 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
            shows at a time, so the bar always reads [primary][Stel uit][Overslaan][Stop]. -->
       <button class="btn btn-green btn-stack" id="strCheckBtn" onclick="strNextSet()" style="flex:1;"><span class="bi">✓</span><span class="bl">Voltooid</span></button>
       <button class="btn btn-cyan btn-stack" id="strPlayBtn" onclick="strStartSet()" style="display:none;flex:1;"><span class="bi">▶</span><span class="bl">Start</span></button>
+      <button class="btn btn-cyan btn-stack" id="runBtnExtra" onclick="strExtraSet()" style="display:none;flex:1;"><span class="bi">＋</span><span class="bl">Extra set</span></button>
       <button class="btn btn-ghost" id="runBtnPause" onclick="togglePause()" style="display:none;flex:1;" disabled>⏸ Pauze</button>
       <button class="btn btn-amber btn-stack" id="runBtnSkip" onclick="strSkipExercise()" style="flex:1;"><span class="bi">✕</span><span class="bl">Overslaan</span></button>
       <button class="btn btn-red btn-stack" id="runBtnStop" onclick="stopRunner()" style="flex:1;" title="Stop"><span class="bi">⏹</span><span class="bl">Stop</span></button>
@@ -2284,7 +2285,7 @@ function setExerciseActions(kind) {
   show('runBtnPause', kind === 'cardio');
   show('runBtnSkip', inExercise);
   show('runBtnStop', kind !== 'end');
-  if (!inExercise) { show('strPlayBtn', false); show('strCheckBtn', false); }
+  if (!inExercise) { show('strPlayBtn', false); show('strCheckBtn', false); show('runBtnExtra', false); }
 }
 
 // Render the top navigation strip from the SessionNav model. Done (green) dots are locked.
@@ -2297,26 +2298,40 @@ function renderNavStrip() {
     const entry = runEntries[c.index];
     const partial = (entry && log[entry.exerciseId]?.sets?.length) > 0;
     const cls = ['nav-dot'];
-    if (c.status === 'done') cls.push('is-done', 'is-locked'); // fully done -> locked
-    else if (c.status === 'stopped') cls.push('is-stopped');  // did part, logged, resumable
+    if (c.status === 'done') cls.push('is-done');          // tap to re-open for an extra set
+    else if (c.status === 'stopped') cls.push('is-stopped'); // did part, logged, resumable
     else if (c.status === 'skipped') cls.push('is-skipped');
     else if (partial) cls.push('is-partial'); // some sets logged, exercise not finished
     if (c.isCurrent) cls.push('is-current');
     const ex = getExercise(entry?.exerciseId);
     const name = (ex?.name || '').replace(/"/g, '&quot;');
-    const tap = c.status === 'done' ? '' : `onclick="jumpToEntry(${c.index})"`;
-    return `<button type="button" class="${cls.join(' ')}" ${tap} title="${name}">${c.number}</button>`;
+    return `<button type="button" class="${cls.join(' ')}" onclick="jumpToEntry(${c.index})" title="${name}">${c.number}</button>`;
   }).join('<i class="nav-line"></i>');
 }
 
-// Tap a circle to jump to that exercise. Leaving a part-done exercise logs it (orange,
-// locked) so sets are never lost; an untouched one just stays pending.
+// Tap a circle to jump to that exercise. First resolve the one we're leaving by how far it
+// got (green if complete, orange if partial, pending if untouched) so sets are never lost.
 async function jumpToEntry(i) {
   if (!runNav || window.SessionNav.current(runNav) === i) return;
   await stopCurrentEntryActivity();
-  if (currentHasLoggedSets()) window.SessionNav.stopEarly(runNav);
-  window.SessionNav.jumpTo(runNav, i); // no-op on locked targets (strip never wires those)
+  resolveLeavingExercise(false);
+  window.SessionNav.jumpTo(runNav, i);
   await startCurrentEntry();
+}
+
+// Resolve the current exercise as we leave it, based on logged vs planned sets:
+//   complete (green) if all planned sets are done, stopped-early (orange) if some, else
+//   skipped (red) when the user explicitly pressed Overslaan / left pending on a jump.
+function resolveLeavingExercise(explicitSkip) {
+  const ci = window.SessionNav.current(runNav);
+  if (ci == null) return;
+  const entry = runEntries[ci];
+  const ex = entry && getExercise(entry.exerciseId);
+  const done = (entry && window.runLog?.[entry.exerciseId]?.sets?.length) || 0;
+  const planned = ex ? (entry.sets || 1) * (ex.perSide ? 2 : 1) : 0;
+  if (planned > 0 && done >= planned) window.SessionNav.complete(runNav);
+  else if (done > 0) window.SessionNav.stopEarly(runNav);
+  else if (explicitSkip) window.SessionNav.skip(runNav);
 }
 
 // Stop timers and the belt for the current entry (shared by skip/jump/stop).
@@ -2330,13 +2345,6 @@ async function stopCurrentEntryActivity() {
   currentCardioUsesBle = false;
 }
 
-// Whether the current exercise already has ≥1 logged set.
-function currentHasLoggedSets() {
-  const ci = window.SessionNav.current(runNav);
-  if (ci == null) return false;
-  const entry = runEntries[ci];
-  return !!(entry && window.runLog?.[entry.exerciseId]?.sets?.length > 0);
-}
 
 async function startRunner() {
   const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
@@ -2577,9 +2585,18 @@ function updateStrengthUI(entry, ex) {
 
   const totalSets = entry.sets || 1;
   const sides = ex.perSide ? 2 : 1;
+  const plannedSets = totalSets * sides;
+  const loggedSets = window.runLog?.[entry.exerciseId]?.sets?.length || 0;
+  const extraMode = loggedSets >= plannedSets; // all planned sets done -> adding extras
   const setNum = strSetIndex * sides + strSideIndex + 1;
 
-  document.getElementById('strSetLabel').textContent = `Set ${setNum}/${totalSets * sides}`;
+  document.getElementById('strSetLabel').textContent =
+    extraMode ? `Extra set ${loggedSets - plannedSets + 1}` : `Set ${setNum}/${plannedSets}`;
+
+  // Overslaan doubles as "Klaar" once you're adding extra sets (leaving keeps it green).
+  document.getElementById('runBtnSkip').innerHTML = extraMode
+    ? '<span class="bi">✓</span><span class="bl">Klaar</span>'
+    : '<span class="bi">✕</span><span class="bl">Overslaan</span>';
 
   // Coloured leg badge (blauw Links / oranje Rechts) for every per-side exercise.
   document.getElementById('strSideBadge').innerHTML =
@@ -2636,7 +2653,18 @@ function updateStrengthUI(entry, ex) {
 
   const playBtn = document.getElementById('strPlayBtn');
   const checkBtn = document.getElementById('strCheckBtn');
+  const extraBtn = document.getElementById('runBtnExtra');
   const timerArea = document.getElementById('strTimerArea');
+
+  if (extraMode) {
+    // Past the planned sets: the green Voltooid is replaced by a blue "Extra set".
+    timerArea.style.display = 'none';
+    playBtn.style.display = 'none';
+    checkBtn.style.display = 'none';
+    extraBtn.style.display = '';
+    return;
+  }
+  extraBtn.style.display = 'none';
 
   if (ex.measureBy === 'duration') {
     timerArea.style.display = '';
@@ -2713,11 +2741,9 @@ function strStartTimer() {
   }, 1000);
 }
 
-function strNextSet() {
-  const entry = runEntries[runEntryIndex];
-  const ex = getExercise(entry?.exerciseId);
-  if (!entry || !ex) return;
-
+// Capture the active set into runLog and advance the set/side counters. Shared by the
+// normal "Voltooid" flow and the "Extra set" flow. Returns the logged set.
+function captureCurrentSet(entry, ex) {
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
@@ -2754,6 +2780,15 @@ function strNextSet() {
   const sides = ex.perSide ? 2 : 1;
   strSideIndex++;
   if (strSideIndex >= sides) { strSideIndex = 0; strSetIndex++; }
+  return set;
+}
+
+function strNextSet() {
+  const entry = runEntries[runEntryIndex];
+  const ex = getExercise(entry?.exerciseId);
+  if (!entry || !ex) return;
+
+  const set = captureCurrentSet(entry, ex);
 
   if (strSetIndex >= (entry.sets || 1)) {
     playBeep(); playBeep();
@@ -2767,14 +2802,23 @@ function strNextSet() {
   updateStrengthUI(entry, ex);
 }
 
-// ✕ Overslaan: leave the current exercise and move on (the workout can end without it).
-// If you already did ≥1 set, those sets are logged and the circle goes orange; if you did
-// nothing, it's a plain skip (red). Either way you can tap the circle to come back — a
-// stopped-early (orange) exercise resumes at the set where you left off.
+// ＋ Extra set: log one more set on an already-completed exercise and stay in extra mode so
+// you can add another (incl. the other side). Leaving via Klaar keeps it green.
+function strExtraSet() {
+  const entry = runEntries[runEntryIndex];
+  const ex = getExercise(entry?.exerciseId);
+  if (!entry || !ex) return;
+  captureCurrentSet(entry, ex);
+  playBeep();
+  updateStrengthUI(entry, ex); // still past the planned count -> stays in extra mode
+}
+
+// ✕ Overslaan (also the "✓ Klaar" button while adding extra sets): leave the current
+// exercise and move on. Green if all planned sets are done, orange if some, red if none.
+// You can always tap the circle to come back.
 async function strSkipExercise() {
   await stopCurrentEntryActivity();
-  if (currentHasLoggedSets()) window.SessionNav.stopEarly(runNav);
-  else window.SessionNav.skip(runNav);
+  resolveLeavingExercise(true);
   await startCurrentEntry();
 }
 

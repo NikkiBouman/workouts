@@ -66,13 +66,13 @@ export function stopEarly(s) {
   resolveCurrent(s, STATUS.STOPPED);
 }
 
-// Jump to entry i by tapping its circle. Only a fully completed (green) exercise is locked.
-// Skipped (red) and stopped-early (orange) entries flip back to pending so you can resume;
-// the runner resumes a stopped-early exercise at the set where you left off. Returns true
-// when the jump happened.
+// Jump to entry i by tapping its circle. Every circle is reachable:
+//   - skipped (red) / stopped-early (orange) → flip to pending so the runner resumes them
+//     (stopped-early continues at the set where you left off);
+//   - done (green) → stays done; the runner re-opens it in "extra set" mode.
+// Returns true when the jump happened.
 export function jumpTo(s, i) {
   if (i < 0 || i >= s.n) return false;
-  if (s.status[i] === STATUS.DONE) return false; // only completed is locked
   if (s.status[i] === STATUS.SKIPPED || s.status[i] === STATUS.STOPPED) s.status[i] = STATUS.PENDING;
   s.pos = s.order.indexOf(i);
   return true;

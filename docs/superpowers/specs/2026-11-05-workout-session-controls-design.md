@@ -57,6 +57,10 @@ postpone logic (`postpone()` in the nav module, one-position-back reordering) wa
     it later to come back and **resume at the set where you left off** (no re-logging).
   - Did **nothing** → plain **skip**: circle turns **red**, nothing logged, revisitable (it
     restarts from set 1 since there was nothing to resume).
+- **Extra set** — when you re-enter a **fully completed** exercise (tap its green circle), the
+  green Voltooid is replaced by a blue **＋ Extra set**. Each press logs one more set beyond
+  the plan and stays, so you can add several (incl. both sides). The Overslaan button reads
+  **✓ Klaar** here and leaves the exercise still green.
 - **Stop** — opens the stop dialog.
 
 ## Navigation strip
@@ -69,16 +73,14 @@ in fixed workout order. Numbers and positions never move. Scrolls horizontally o
 | Current | thick blue border (over whatever fill) | n/a |
 | Pending | thin blue border, no fill | yes → becomes current |
 | In progress (current, ≥1 set this exercise) | thick **green** border, no fill | n/a |
-| Completed (Voltooid) | green fill | **no — locked** |
+| Completed (Voltooid) | green fill | yes → re-opens in extra-set mode |
 | Skipped (Overslaan, nothing done) | red fill | yes → restarts at set 1 |
 | Stopped early (Overslaan, ≥1 set logged) | **amber/orange** fill | yes → resumes at next set |
 
-- Tapping a **pending**, **skipped**, or **stopped** circle jumps there. Skipped/stopped flip
-  back to pending; a stopped (orange) exercise resumes at the set where you left off.
-- Only a **green (fully done)** circle is **locked** — redoing a completed exercise (an extra
-  set beyond the plan) is out of scope.
-- The strip stays visible on the end screen so the user can tap a blue/red/orange circle to
-  go back into the workout; doing so restores the action buttons.
+- **Every circle is reachable.** Skipped/stopped flip back to pending (a stopped orange one
+  resumes at the set you left off); a done green one stays done and re-opens in extra-set mode.
+- The strip stays visible on the end screen so the user can tap any circle to go back into the
+  workout; doing so restores the action buttons.
 
 ## Leaving and resuming an exercise
 
@@ -147,14 +149,17 @@ mirror of `SessionNav.current()` so existing per-set code is untouched.
 4. `stopEarly()` → current stopped (orange), not pending, doesn't block the end.
 5. `jumpTo(pending)` → becomes current.
 6. `jumpTo(skipped)` → flips to pending + current.
-7. `jumpTo(stopped)` → flips to pending + current (resumable); `jumpTo(done)` → no-op (locked).
+7. `jumpTo(stopped)` → flips to pending + current (resumable); `jumpTo(done)` → allowed,
+   stays done (re-opens in extra-set mode).
 8. no pending remaining → `current()` null / `isEnd()` true → end screen.
 
-The resume-at-set arithmetic (logged-set count → set/side index) lives in `index.html`
-(`startStrengthEntry`) and is covered end-to-end by the browser harness: do 2 of 6 → Overslaan
-→ tap the orange circle → resumes at "Set 3/6" → finish → the exercise has 6 logged sets, not 8.
+The per-exercise set bookkeeping (resume-at-set index, planned-vs-logged, extra sets) lives in
+`index.html` (`startStrengthEntry` / `captureCurrentSet` / `resolveLeavingExercise`) and is
+covered end-to-end by the browser harness: 2 of 6 → Overslaan → tap orange → resume at "Set
+3/6" → finish → 6 logged sets (not 8); finish an exercise → tap it green → Extra set ×2 →
+logged count +2, stays green via Klaar.
 
-## Out of scope
+## Out of scope / known gaps
 
-- Redoing a *fully completed* exercise (an extra set beyond the plan) — green circles stay
-  locked.
+- An **Extra set** on a timed (duration) exercise logs the planned duration without re-running
+  the countdown — acceptable for now.

@@ -75,13 +75,13 @@ test('jumpTo skipped: flips back to pending and becomes current', () => {
   assert.equal(isEnd(s), false);
 });
 
-test('jumpTo done: no-op (green is locked)', () => {
+test('jumpTo done: allowed (re-open for an extra set), status stays done', () => {
   const s = createSession(3);
   complete(s); // 0 done, current 1
   const ok = jumpTo(s, 0);
-  assert.equal(ok, false);
-  assert.equal(current(s), 1); // unchanged
-  assert.equal(strip(s)[0].status, 'done');
+  assert.equal(ok, true);
+  assert.equal(current(s), 0);
+  assert.equal(strip(s)[0].status, 'done'); // stays done (not flipped to pending)
 });
 
 test('jumpTo stopped: resumable (orange flips to pending and becomes current)', () => {
