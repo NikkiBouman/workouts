@@ -82,6 +82,8 @@ button:active:not(:disabled) { transform:scale(0.97); }
 .btn-green { background:var(--green); color:var(--bg); }
 .btn-ghost { background:transparent; color:var(--muted); border:1px solid var(--border); }
 .btn-ghost:hover:not(:disabled) { border-color:var(--cyan); color:var(--cyan); }
+.btn-amber { background:var(--amber); color:#fff; }
+.btn-amber:hover:not(:disabled) { filter:brightness(1.1); }
 .btn-sm { padding:0.4rem 0.75rem; font-size:0.75rem; }
 .btn-full { width:100%; }
 .btn-icon { background:var(--s2); color:var(--text); width:44px; height:44px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; border-radius:50%; flex-shrink:0; }
@@ -266,6 +268,10 @@ input:focus { border-color:var(--cyan); }
 
 .runner-actions { display:flex; gap:0.5rem; margin-bottom:1rem; }
 .runner-actions button { flex:1; padding:1rem; font-size:1rem; font-weight:800; }
+/* Stacked action buttons: icon on top, label below */
+.btn-stack { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0.12rem; line-height:1.05; }
+.btn-stack .bi { font-size:1.15rem; line-height:1; }
+.btn-stack .bl { font-size:0.82rem; }
 
 /* Colors for timeline segments */
 .seg-c0{background:#0e7490} .seg-c1{background:#0369a1} .seg-c2{background:#0f766e}
@@ -301,6 +307,29 @@ input:focus { border-color:var(--cyan); }
   background:var(--s1); border:1px solid var(--border);
   border-radius:var(--r); padding:0.5rem 0.65rem; margin-bottom:0.25rem;
 }
+/* Exercise navigation strip (top of the runner) */
+#runNavStrip {
+  flex:0 0 auto; display:flex; align-items:center; justify-content:safe center; gap:0;
+  padding:0.5rem 0.5rem 0.35rem; overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch; scrollbar-width:none;
+}
+#runNavStrip::-webkit-scrollbar { display:none; }
+#runNavStrip:empty { display:none; }
+.nav-dot {
+  flex:0 0 auto; width:32px; height:32px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--mono); font-size:0.85rem; font-weight:700; line-height:1;
+  border:1.5px solid var(--cyan); background:transparent; color:var(--cyan);
+  padding:0; cursor:pointer; transition:background 0.15s, border-color 0.15s;
+}
+.nav-dot.is-done { background:var(--green); border-color:var(--green); color:var(--bg); }
+.nav-dot.is-skipped { background:var(--red); border-color:var(--red); color:#fff; }
+.nav-dot.is-stopped { background:var(--amber); border-color:var(--amber); color:#fff; }
+.nav-dot.is-partial { border-color:var(--green); border-width:3px; }
+.nav-dot.is-current { border-width:3px; box-shadow:0 0 0 2px var(--bg), 0 0 7px var(--cyan); }
+.nav-dot.is-locked { cursor:default; }
+/* Connector lines between the circles */
+.nav-line { flex:0 0 auto; width:16px; height:2px; background:var(--border); align-self:center; }
 .runner-actions { display:flex; gap:0.5rem; }
 .runner-actions button { flex:1; }
 
@@ -600,6 +629,13 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       <div style="font-family:var(--ui);font-size:0.8rem;color:rgba(255,255,255,0.7);margin-bottom:1.5rem;">De app probeert de loopband te stoppen.<br>Vertrouw hier NIET op — gebruik altijd de fysieke noodstop.</div>
       <button id="emergencyDismissBtn" onclick="dismissEmergency()" disabled style="font-family:var(--ui);font-weight:700;font-size:1rem;padding:1rem 2rem;border-radius:var(--r);background:#fff;color:#dc2626;border:none;cursor:pointer;">Wacht...</button>
     </div>
+    <!-- Top: exercise navigation strip (numbered circles, tap to jump) -->
+    <div id="runNavStrip"></div>
+
+    <!-- Fullscreen toggle (opt-in), top-right just under the nav strip -->
+    <button id="runFsBtn" onclick="toggleFullscreen()" title="Volledig scherm" aria-label="Volledig scherm"
+      style="position:absolute;top:50px;right:10px;z-index:20;width:38px;height:38px;border-radius:9px;background:var(--s2);color:var(--text);display:flex;align-items:center;justify-content:center;"></button>
+
     <!-- Left / Top: Chart -->
     <div id="runnerChart">
       <div id="runChartWrap" style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:0.5rem 0.4rem 0.2rem 0.4rem;overflow:hidden;height:100%;">
@@ -689,11 +725,14 @@ h4 { font-size:0.75rem; font-weight:700; color:var(--muted); text-transform:uppe
       <!-- Buttons (always at bottom, outside scrollable area) -->
     </div>
     <div id="runBtnRow" class="runner-actions">
-      <button class="btn btn-ghost hidden" id="runBtnPause" onclick="togglePause()" disabled>⏸ Pauze</button>
-      <button class="btn btn-ghost hidden" id="runBtnSkip" onclick="strSkipExercise()">⏭ Skip</button>
-      <button class="btn btn-cyan" id="strPlayBtn" onclick="strStartSet()" style="display:none;flex:1.4;">▶ Start</button>
-      <button class="btn btn-green" id="strCheckBtn" onclick="strNextSet()" style="flex:1.6;">✓ Voltooid</button>
-      <button class="btn btn-red" id="runBtnStop" onclick="stopRunner()" disabled style="flex:1;">⏹ Stop</button>
+      <!-- Primary (first) slot is contextual: ▶ Start / ✓ Voltooid for strength &
+           non-BLE cardio, ⏸ Pauze for the treadmill timeline. Only one of the three
+           shows at a time, so the bar always reads [primary][Stel uit][Overslaan][Stop]. -->
+      <button class="btn btn-green btn-stack" id="strCheckBtn" onclick="strNextSet()" style="flex:1;"><span class="bi">✓</span><span class="bl">Voltooid</span></button>
+      <button class="btn btn-cyan btn-stack" id="strPlayBtn" onclick="strStartSet()" style="display:none;flex:1;"><span class="bi">▶</span><span class="bl">Start</span></button>
+      <button class="btn btn-ghost" id="runBtnPause" onclick="togglePause()" style="display:none;flex:1;" disabled>⏸ Pauze</button>
+      <button class="btn btn-amber btn-stack" id="runBtnSkip" onclick="strSkipExercise()" style="flex:1;"><span class="bi">✕</span><span class="bl">Overslaan</span></button>
+      <button class="btn btn-red btn-stack" id="runBtnStop" onclick="stopRunner()" style="flex:1;" title="Stop"><span class="bi">⏹</span><span class="bl">Stop</span></button>
     </div>
   </div>
 </div>
@@ -2208,7 +2247,8 @@ let runCalcDistance = 0;
 
 // Unified entry runner
 let runEntries = [];
-let runEntryIndex = 0;
+let runEntryIndex = 0;        // always mirrors SessionNav.current(runNav)
+let runNav = null;            // SessionNav session state (per-entry status + play order)
 let runMode = 'idle';
 let runStartTime = 0;
 let currentCardioUsesBle = false;
@@ -2230,14 +2270,73 @@ function showRunnerMode(mode) {
   document.getElementById('runnerCardioMode').style.display = mode === 'cardio' ? '' : 'none';
   document.getElementById('runnerStrengthMode').style.display = mode === 'strength' ? 'flex' : 'none';
   document.getElementById('runnerChart').style.display = mode === 'cardio' ? '' : 'none';
-  document.getElementById('runBtnPause').classList.toggle('hidden', mode !== 'cardio');
-  document.getElementById('runBtnSkip').classList.remove('hidden');
-  // The ▶ Start / ✓ Voltooid buttons are strength-only; updateStrengthUI shows the
-  // right one when a set is active.
-  if (mode !== 'strength') {
-    document.getElementById('strPlayBtn').style.display = 'none';
-    document.getElementById('strCheckBtn').style.display = 'none';
-  }
+}
+
+// Bottom-bar visibility for a given context. The primary strength slot (▶ Start / ✓
+// Voltooid) stays owned by updateStrengthUI; this only governs Pauze/Overslaan/Stop
+// and clears the strength primaries when we leave an exercise.
+function setExerciseActions(kind) {
+  // kind: 'strength' | 'cardio' | 'prompt' | 'end'
+  const show = (id, on) => { document.getElementById(id).style.display = on ? '' : 'none'; };
+  const inExercise = kind === 'strength' || kind === 'cardio';
+  // The end screen shows only "Bevestig sessie" (in strActions); hide the whole bottom row.
+  document.getElementById('runBtnRow').style.display = kind === 'end' ? 'none' : 'flex';
+  show('runBtnPause', kind === 'cardio');
+  show('runBtnSkip', inExercise);
+  show('runBtnStop', kind !== 'end');
+  if (!inExercise) { show('strPlayBtn', false); show('strCheckBtn', false); }
+}
+
+// Render the top navigation strip from the SessionNav model. Done (green) dots are locked.
+function renderNavStrip() {
+  const el = document.getElementById('runNavStrip');
+  if (!el) return;
+  if (!runNav) { el.innerHTML = ''; return; }
+  const log = window.runLog || {};
+  el.innerHTML = window.SessionNav.strip(runNav).map(c => {
+    const entry = runEntries[c.index];
+    const partial = (entry && log[entry.exerciseId]?.sets?.length) > 0;
+    const cls = ['nav-dot'];
+    if (c.status === 'done') cls.push('is-done', 'is-locked');
+    else if (c.status === 'stopped') cls.push('is-stopped', 'is-locked'); // did part, logged, locked
+    else if (c.status === 'skipped') cls.push('is-skipped');
+    else if (partial) cls.push('is-partial'); // some sets logged, exercise not finished
+    if (c.isCurrent) cls.push('is-current');
+    const ex = getExercise(entry?.exerciseId);
+    const name = (ex?.name || '').replace(/"/g, '&quot;');
+    const locked = c.status === 'done' || c.status === 'stopped';
+    const tap = locked ? '' : `onclick="jumpToEntry(${c.index})"`;
+    return `<button type="button" class="${cls.join(' ')}" ${tap} title="${name}">${c.number}</button>`;
+  }).join('<i class="nav-line"></i>');
+}
+
+// Tap a circle to jump to that exercise. Leaving a part-done exercise logs it (orange,
+// locked) so sets are never lost; an untouched one just stays pending.
+async function jumpToEntry(i) {
+  if (!runNav || window.SessionNav.current(runNav) === i) return;
+  await stopCurrentEntryActivity();
+  if (currentHasLoggedSets()) window.SessionNav.stopEarly(runNav);
+  window.SessionNav.jumpTo(runNav, i); // no-op on locked targets (strip never wires those)
+  await startCurrentEntry();
+}
+
+// Stop timers and the belt for the current entry (shared by skip/jump/stop).
+async function stopCurrentEntryActivity() {
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
+  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
+  strTimerActive = false;
+  hrSegDiscard();
+  if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
+  currentCardioUsesBle = false;
+}
+
+// Whether the current exercise already has ≥1 logged set.
+function currentHasLoggedSets() {
+  const ci = window.SessionNav.current(runNav);
+  if (ci == null) return false;
+  const entry = runEntries[ci];
+  return !!(entry && window.runLog?.[entry.exerciseId]?.sets?.length > 0);
 }
 
 async function startRunner() {
@@ -2248,6 +2347,7 @@ async function startRunner() {
   if (!runEntries.length) { alert('Workout is leeg'); return; }
 
   runEntryIndex = 0;
+  runNav = window.SessionNav.createSession(runEntries.length);
   window.runLog = {};
   window.logPlan = {
     master: document.getElementById('logToggle')?.dataset.on !== '0',
@@ -2258,9 +2358,10 @@ async function startRunner() {
   runPaused = false;
   runStartTime = Date.now();
 
-  enterFullscreen();
+  // Fullscreen is now opt-in via the top-right button (toggleFullscreen); don't force it.
   acquireWakeLock();
   showView('viewRunner');
+  updateFsIcon();
   document.getElementById('runBtnStop').disabled = false;
   // Clear any leftover prompt/completion content from a previous run.
   const strActions = document.getElementById('strActions');
@@ -2272,14 +2373,17 @@ async function startRunner() {
 let strCountdownInterval = null; // P1: global so we can clean it up
 
 async function startCurrentEntry() {
-  if (runEntryIndex >= runEntries.length) { finishWorkout(); return; }
+  renderNavStrip();
+  const ci = window.SessionNav.current(runNav);
+  if (ci == null) { showEndScreen(false); return; }
+  runEntryIndex = ci;
   const entry = runEntries[runEntryIndex];
   const ex = getExercise(entry.exerciseId);
-  if (!ex) { runEntryIndex++; await startCurrentEntry(); return; }
+  if (!ex) { window.SessionNav.skip(runNav); await startCurrentEntry(); return; }
 
-  // Empty treadmill entry: skip
+  // Empty treadmill entry: auto-skip past it
   if (usesTreadmill(ex) && (!entry.blocks || !entry.blocks.length)) {
-    runEntryIndex++;
+    window.SessionNav.skip(runNav);
     await startCurrentEntry();
     return;
   }
@@ -2296,7 +2400,7 @@ async function startCurrentEntry() {
           `${ex.name} heeft een loopband-verbinding nodig.`,
           [{ label: '🔗 Verbind', value: 'connect' }, { label: '⏭ Skip', value: 'skip' }]
         );
-        if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
+        if (choice === 'skip') { window.SessionNav.skip(runNav); await startCurrentEntry(); return; }
         if (choice === 'connect') {
           await bleConnect();
           if (isBleConnected()) resolved = true;
@@ -2311,7 +2415,7 @@ async function startCurrentEntry() {
       `Stap op de loopband — ${ex.name}`,
       [{ label: '▶ Start', value: 'start' }, { label: '⏭ Skip', value: 'skip' }]
     );
-    if (choice === 'skip') { runEntryIndex++; await startCurrentEntry(); return; }
+    if (choice === 'skip') { window.SessionNav.skip(runNav); await startCurrentEntry(); return; }
 
     await startCardioEntry(entry);
   } else {
@@ -2332,10 +2436,9 @@ function showEntryPrompt(title, subtitle, buttons) {
     document.getElementById('strPrevSession').style.display = 'none';
     document.getElementById('strPrevSession').innerHTML = '';
     document.getElementById('strTimerArea').style.display = 'none';
-    // The prompt owns the screen: hide the per-set action buttons in the bottom bar.
-    document.getElementById('strPlayBtn').style.display = 'none';
-    document.getElementById('strCheckBtn').style.display = 'none';
-    document.getElementById('runBtnSkip').classList.add('hidden');
+    // The prompt owns the screen: hide the exercise action buttons (its own buttons live
+    // in strActions). Keep Stop available.
+    setExerciseActions('prompt');
     const actions = document.getElementById('strActions');
     actions.style.display = '';
     actions.innerHTML = buttons.map(b =>
@@ -2359,6 +2462,7 @@ function showEntryPrompt(title, subtitle, buttons) {
 
 async function startCardioEntry(entry) {
   showRunnerMode('cardio');
+  setExerciseActions('cardio');
 
   // Set BLE flag for this cardio entry
   const cardioEx = getExercise(runEntries[runEntryIndex]?.exerciseId);
@@ -2456,6 +2560,11 @@ function updateStrengthUI(entry, ex) {
   if (!entry) entry = runEntries[runEntryIndex];
   if (!ex) ex = getExercise(entry?.exerciseId);
   if (!entry || !ex) return;
+
+  // Strength bottom bar: Pauze hidden, Stel uit / Overslaan / Stop shown. The ▶ Start /
+  // ✓ Voltooid primary is set further down based on timer/HR state.
+  setExerciseActions('strength');
+  renderNavStrip();
 
   const totalSets = entry.sets || 1;
   const sides = ex.perSide ? 2 : 1;
@@ -2639,7 +2748,7 @@ function strNextSet() {
 
   if (strSetIndex >= (entry.sets || 1)) {
     playBeep(); playBeep();
-    runEntryIndex++;
+    window.SessionNav.complete(runNav);
     startCurrentEntry();
     return;
   }
@@ -2649,31 +2758,82 @@ function strNextSet() {
   updateStrengthUI(entry, ex);
 }
 
+// ✕ Overslaan: leave the current exercise and move on (the workout can end without it).
+// If you already did ≥1 set, those sets are logged and the circle goes orange (locked);
+// if you did nothing, it's a plain skip (red) and stays revisitable by tapping its circle.
 async function strSkipExercise() {
-  // Clean up any running timers
+  await stopCurrentEntryActivity();
+  if (currentHasLoggedSets()) window.SessionNav.stopEarly(runNav);
+  else window.SessionNav.skip(runNav);
+  await startCurrentEntry();
+}
+
+// End screen. Reached when no exercise is pending, or via stop → "wel loggen". Does NOT
+// save — the session is written only when the user taps "Bevestig sessie" (confirmSession).
+function showEndScreen(viaStop) {
   if (runTimer) { clearInterval(runTimer); runTimer = null; }
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   strTimerActive = false;
   hrSegDiscard();
-  // Stop treadmill if active
-  if (currentCardioUsesBle && isBleConnected()) {
-    await sendFTMSStop();
-  }
   currentCardioUsesBle = false;
-  runEntryIndex++;
-  await startCurrentEntry();
+
+  renderNavStrip(); // strip stays visible so the user can tap back into a blue/red exercise
+
+  const totalElapsed = Math.round((Date.now() - runStartTime) / 1000);
+
+  showRunnerMode('strength');
+  document.getElementById('strExImg').style.display = 'none';
+  document.getElementById('strExName').textContent = '';
+  document.getElementById('strSetLabel').textContent = '';
+  document.getElementById('strSideBadge').innerHTML = '';
+  document.getElementById('strDetail').textContent = '';
+  document.getElementById('strWeight').textContent = '';
+  document.getElementById('strPrevSession').style.display = 'none';
+  document.getElementById('strPrevSession').innerHTML = '';
+  document.getElementById('strTimerArea').style.display = 'none';
+  document.getElementById('strCapture').innerHTML = '';
+  setExerciseActions('end'); // hide all four action buttons incl. Stop
+
+  // Weights-changed detection drives the optional secondary button only.
+  const wkForUpdate = loadWorkouts().find(w => w.id === previewWorkoutId);
+  const changed = [];
+  if (wkForUpdate) {
+    for (const r of Object.values(window.runLog || {})) {
+      const topW = r.sets.reduce((m, s) => Math.max(m, s.weight || 0), 0);
+      const topReps = r.sets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
+      const entry = (wkForUpdate.entries || []).find(e => e.exerciseId === r.exerciseId);
+      if (entry && r.weighted && topW && topW !== (entry.weight || 0)) {
+        changed.push({ exerciseId: r.exerciseId, name: r.name, topW, topReps });
+      }
+    }
+  }
+  window._pendingPlanUpdate = { workoutId: previewWorkoutId, changed };
+
+  const loggedCount = Object.values(window.runLog || {}).filter(r => r.sets.length).length;
+  const title = viaStop ? 'Gedeeltelijke workout' : 'Workout voltooid!';
+  const primary = loggedCount
+    ? `<button class="btn btn-green btn-full" onclick="confirmSession()" style="padding:1rem;font-size:1.05rem;font-weight:800;">✓ Bevestig sessie</button>`
+    : `<button class="btn btn-ghost btn-full" onclick="goHomeFromRunner()" style="padding:1rem;font-size:1.05rem;font-weight:800;">Terug naar start</button>`;
+
+  const actions = document.getElementById('strActions');
+  actions.style.display = '';
+  actions.innerHTML = `
+    <div style="text-align:center;">
+      <div style="width:110px;height:110px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:3rem;color:#fff;">✓</div>
+      <div style="font-size:1.3rem;font-weight:800;margin-bottom:0.25rem;">${title}</div>
+      <div style="font-family:var(--mono);font-size:1rem;color:var(--muted);">${fmtTime(totalElapsed)}</div>
+      <div style="font-size:0.8rem;color:var(--muted);margin:0.15rem 0 1rem;">${loggedCount ? `${loggedCount} oefening(en) gelogd` : 'Niets om te loggen'}</div>
+      ${primary}
+      ${changed.length ? `<button class="btn btn-cyan btn-sm" onclick="applyPlanUpdate()" style="margin-top:0.5rem;">Nieuwe gewichten als standaard opslaan (${changed.length})</button>` : ''}
+    </div>`;
+
+  playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
 }
 
-async function finishWorkout() {
-  if (runTimer) { clearInterval(runTimer); runTimer = null; }
-  if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
-  if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
-  if (currentCardioUsesBle && isBleConnected()) await sendFTMSStop();
-  currentCardioUsesBle = false;
-  hrSegDiscard();
-
-  // Log to history
+// Write the session to history (reads window.runLog as it stands now, so anything done
+// after returning via the nav strip is included), then go home.
+function confirmSession() {
   const raw = loadWorkouts().find(w => w.id === previewWorkoutId);
   const plan = window.logPlan || { master: true, perExercise: {} };
   if (raw && plan.master) {
@@ -2697,50 +2857,15 @@ async function finishWorkout() {
       window.DB.addSession(session);
     }
   }
+  goHomeFromRunner();
+}
 
-  const totalElapsed = Math.round((Date.now() - runStartTime) / 1000);
-
-  // Show completion screen
-  showRunnerMode('strength');
-  document.getElementById('strExImg').style.display = 'none';
-  document.getElementById('strExName').textContent = '';
-  document.getElementById('strSetLabel').textContent = '';
-  document.getElementById('strSideBadge').innerHTML = '';
-  document.getElementById('strDetail').textContent = '';
-  document.getElementById('strWeight').textContent = '';
-  document.getElementById('strPrevSession').style.display = 'none';
-  document.getElementById('strPrevSession').innerHTML = '';
-  document.getElementById('strTimerArea').style.display = 'none';
-  document.getElementById('runBtnPause').disabled = true;
-  document.getElementById('runBtnSkip').classList.add('hidden');
-  document.getElementById('strPlayBtn').style.display = 'none';
-  document.getElementById('strCheckBtn').style.display = 'none';
-
-  const wkForUpdate = loadWorkouts().find(w => w.id === previewWorkoutId);
-  const changed = [];
-  if (wkForUpdate) {
-    for (const r of Object.values(window.runLog || {})) {
-      const topW = r.sets.reduce((m, s) => Math.max(m, s.weight || 0), 0);
-      const topReps = r.sets.reduce((m, s) => Math.max(m, s.reps || 0), 0);
-      const entry = (wkForUpdate.entries || []).find(e => e.exerciseId === r.exerciseId);
-      if (entry && r.weighted && topW && topW !== (entry.weight || 0)) {
-        changed.push({ exerciseId: r.exerciseId, name: r.name, topW, topReps });
-      }
-    }
-  }
-  window._pendingPlanUpdate = { workoutId: previewWorkoutId, changed };
-
-  const actions = document.getElementById('strActions');
-  actions.style.display = '';
-  actions.innerHTML = `
-    <div style="text-align:center;">
-      <div style="width:120px;height:120px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;font-size:3rem;color:#fff;">✓</div>
-      <div style="font-size:1.3rem;font-weight:800;margin-bottom:0.25rem;">Workout voltooid!</div>
-      <div style="font-family:var(--mono);font-size:1rem;color:var(--muted);">${fmtTime(totalElapsed)}</div>
-    </div>
-    ${changed.length ? `<button class="btn btn-cyan btn-sm" onclick="applyPlanUpdate()">Nieuwe gewichten als standaard opslaan (${changed.length})</button>` : ''}`;
-
-  playBeep(); setTimeout(playBeep, 300); setTimeout(playBeep, 600);
+function goHomeFromRunner() {
+  window.runLog = {};
+  runNav = null;
+  releaseWakeLock();
+  exitFullscreen();
+  showView('viewHome');
 }
 
 function applyPlanUpdate() {
@@ -2833,22 +2958,69 @@ async function togglePause() {
 }
 
 async function stopRunner() {
-  if (runTimer) clearInterval(runTimer);
-  runTimer = null;
+  // Halt activity for safety before asking. Stop the belt first so a failed stop still
+  // escalates to the emergency screen instead of hiding behind a dialog.
+  if (runTimer) { clearInterval(runTimer); runTimer = null; }
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
   if (strCountdownInterval) { clearInterval(strCountdownInterval); strCountdownInterval = null; }
   if (confirmWaitInterval) { clearInterval(confirmWaitInterval); confirmWaitInterval = null; }
   strTimerActive = false;
   hrSegDiscard();
-  const ok = currentCardioUsesBle && isBleConnected() ? await sendFTMSStop() : true;
-  currentCardioUsesBle = false;
-  if (!ok) {
-    enterEmergency('Stop-commando mislukt!\nGebruik de fysieke noodstop!');
-    return;
+  const wasCardio = currentCardioUsesBle;
+  if (currentCardioUsesBle && isBleConnected()) {
+    const ok = await sendFTMSStop();
+    if (!ok) { enterEmergency('Stop-commando mislukt!\nGebruik de fysieke noodstop!'); return; }
   }
-  releaseWakeLock();
-  exitFullscreen();
-  showView('viewHome');
+  currentCardioUsesBle = false;
+
+  const choice = await showStopDialog();
+  if (choice === 'cancel') { await resumeCurrentEntry(wasCardio); return; }
+  if (choice === 'log') { showEndScreen(true); return; }
+  goHomeFromRunner(); // discard
+}
+
+// Stop dialog: log partial / don't log / cancel. Backdrop tap = cancel.
+function showStopDialog() {
+  return new Promise(resolve => {
+    const ov = document.createElement('div');
+    ov.id = 'stopDialog';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:500;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;padding:1.5rem;';
+    ov.innerHTML = `
+      <div style="background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem;max-width:360px;width:100%;text-align:center;">
+        <div style="font-size:1.1rem;font-weight:800;margin-bottom:0.35rem;">Workout stoppen?</div>
+        <div style="font-size:0.85rem;color:var(--muted);margin-bottom:1rem;">Wil je wat je tot nu toe deed bewaren?</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem;">
+          <button class="btn btn-green" data-choice="log" style="padding:0.9rem;font-weight:800;">✓ Gedeeltelijke workout loggen</button>
+          <button class="btn btn-amber" data-choice="discard" style="padding:0.9rem;font-weight:800;">Niet loggen</button>
+          <button class="btn btn-ghost" data-choice="cancel" style="padding:0.9rem;font-weight:800;">Annuleren</button>
+        </div>
+      </div>`;
+    ov.addEventListener('click', e => {
+      const b = e.target.closest('[data-choice]');
+      const choice = b ? b.dataset.choice : (e.target === ov ? 'cancel' : null);
+      if (!choice) return;
+      ov.remove();
+      resolve(choice);
+    });
+    document.getElementById('viewRunner').appendChild(ov);
+  });
+}
+
+// Resume the current exercise after cancelling a stop. Strength resumes at the current set
+// (no progress lost); treadmill re-enters its start prompt.
+async function resumeCurrentEntry(wasCardio) {
+  const ci = window.SessionNav.current(runNav);
+  if (ci == null) { showEndScreen(false); return; }
+  const entry = runEntries[ci];
+  const ex = getExercise(entry?.exerciseId);
+  if (wasCardio || (ex && usesTreadmill(ex) && entry.blocks?.length)) {
+    await startCurrentEntry();
+  } else {
+    showRunnerMode('strength');
+    document.getElementById('strActions').style.display = 'none';
+    document.getElementById('strActions').innerHTML = '';
+    updateStrengthUI(entry, ex);
+  }
 }
 
 async function finishRunner() {
@@ -2860,7 +3032,7 @@ async function finishRunner() {
   }
   currentCardioUsesBle = false;
   playBeep(); playBeep();
-  runEntryIndex++;
+  window.SessionNav.complete(runNav);
   await startCurrentEntry();
 }
 
@@ -3569,6 +3741,33 @@ function exitFullscreen() {
   } catch (e) {}
 }
 
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function fsIconSvg(on) {
+  const p = on
+    ? 'M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5'   // compress (corners point in)
+    : 'M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5';   // expand (corners point out)
+  return `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="${p}"/></svg>`;
+}
+
+function updateFsIcon() {
+  const btn = document.getElementById('runFsBtn');
+  if (!btn) return;
+  const on = isFullscreen();
+  btn.innerHTML = fsIconSvg(on);
+  btn.title = on ? 'Verlaat volledig scherm' : 'Volledig scherm';
+}
+
+async function toggleFullscreen() {
+  if (isFullscreen()) exitFullscreen();
+  else await enterFullscreen();
+  updateFsIcon();
+}
+
+document.addEventListener('fullscreenchange', updateFsIcon);
+
 /* =============================================
    WORKOUT HISTORY
    ============================================= */
@@ -3612,6 +3811,8 @@ window.APP = {
   window.Chart = Chart;
   import * as StrengthUI from './src/strength-ui.js';
   window.StrengthUI = StrengthUI;
+  import * as SessionNav from './src/session-nav.js';
+  window.SessionNav = SessionNav;
 
   const gate = document.getElementById('authGate');
   const signInBtn = document.getElementById('authSignInBtn');
