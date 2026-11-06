@@ -84,13 +84,14 @@ test('jumpTo done: no-op (green is locked)', () => {
   assert.equal(strip(s)[0].status, 'done');
 });
 
-test('jumpTo stopped: no-op (orange is locked too)', () => {
+test('jumpTo stopped: resumable (orange flips to pending and becomes current)', () => {
   const s = createSession(3);
   stopEarly(s); // 0 stopped, current 1
   const ok = jumpTo(s, 0);
-  assert.equal(ok, false);
-  assert.equal(current(s), 1);
-  assert.equal(strip(s)[0].status, 'stopped');
+  assert.equal(ok, true);
+  assert.equal(current(s), 0);
+  assert.equal(strip(s)[0].status, 'pending');
+  assert.equal(isEnd(s), false);
 });
 
 test('end reached when nothing pending, even with a skipped entry remaining', () => {

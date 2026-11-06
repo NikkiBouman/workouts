@@ -2297,15 +2297,14 @@ function renderNavStrip() {
     const entry = runEntries[c.index];
     const partial = (entry && log[entry.exerciseId]?.sets?.length) > 0;
     const cls = ['nav-dot'];
-    if (c.status === 'done') cls.push('is-done', 'is-locked');
-    else if (c.status === 'stopped') cls.push('is-stopped', 'is-locked'); // did part, logged, locked
+    if (c.status === 'done') cls.push('is-done', 'is-locked'); // fully done -> locked
+    else if (c.status === 'stopped') cls.push('is-stopped');  // did part, logged, resumable
     else if (c.status === 'skipped') cls.push('is-skipped');
     else if (partial) cls.push('is-partial'); // some sets logged, exercise not finished
     if (c.isCurrent) cls.push('is-current');
     const ex = getExercise(entry?.exerciseId);
     const name = (ex?.name || '').replace(/"/g, '&quot;');
-    const locked = c.status === 'done' || c.status === 'stopped';
-    const tap = locked ? '' : `onclick="jumpToEntry(${c.index})"`;
+    const tap = c.status === 'done' ? '' : `onclick="jumpToEntry(${c.index})"`;
     return `<button type="button" class="${cls.join(' ')}" ${tap} title="${name}">${c.number}</button>`;
   }).join('<i class="nav-line"></i>');
 }
@@ -2508,11 +2507,16 @@ async function startCardioEntry(entry) {
 function startStrengthEntry(entry, ex) {
   showRunnerMode('strength');
   if (runTimer) { clearInterval(runTimer); runTimer = null; }
-  strSetIndex = 0;
-  strSideIndex = 0;
   strTimerActive = false;
   hrSegDiscard();
   if (strTimerInterval) { clearInterval(strTimerInterval); strTimerInterval = null; }
+
+  // Resume where you left off: if this exercise already has logged sets (you did some,
+  // then Overslaan'd or tapped away), continue at the next set instead of restarting.
+  const doneSets = window.runLog?.[entry.exerciseId]?.sets || [];
+  const sides = ex.perSide ? 2 : 1;
+  strSetIndex = Math.floor(doneSets.length / sides);
+  strSideIndex = doneSets.length % sides;
 
   // "Beter dan vorige keer": pull the most recent session for this exercise and seed
   // the per-side prefill with its maxima (gewicht/reps/duur). Carry-forward then
@@ -2523,6 +2527,11 @@ function startStrengthEntry(entry, ex) {
   if (strProgressive && strTargets) {
     for (const side of (ex.perSide ? [0, 1] : [0])) {
       strPrefill[side] = strGoalFor(entry, ex, side);
+    }
+    // On resume, carry forward from the last set you actually logged for each side.
+    for (const s of doneSets) {
+      const key = ex.perSide ? (s.side || 0) : 0;
+      strPrefill[key] = { weight: s.weight || 0, reps: s.reps || 0, duration: s.duration || 0 };
     }
   }
 
@@ -2759,8 +2768,9 @@ function strNextSet() {
 }
 
 // ✕ Overslaan: leave the current exercise and move on (the workout can end without it).
-// If you already did ≥1 set, those sets are logged and the circle goes orange (locked);
-// if you did nothing, it's a plain skip (red) and stays revisitable by tapping its circle.
+// If you already did ≥1 set, those sets are logged and the circle goes orange; if you did
+// nothing, it's a plain skip (red). Either way you can tap the circle to come back — a
+// stopped-early (orange) exercise resumes at the set where you left off.
 async function strSkipExercise() {
   await stopCurrentEntryActivity();
   if (currentHasLoggedSets()) window.SessionNav.stopEarly(runNav);
